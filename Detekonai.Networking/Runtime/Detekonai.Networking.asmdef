@@ -1,0 +1,17 @@
+{
+    "name": "Detekonai.Networking",
+    "rootNamespace": "",
+    "references": [
+        "GUID:08cdb4b83fab6eb4b8c615543648efaf",
+        "GUID:27fcba045f4687948845e6091b31dc4b"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

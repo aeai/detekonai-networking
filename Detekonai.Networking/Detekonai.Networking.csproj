@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>0.0.1</Version>
+    <Company>Detekonai</Company>
+    <Authors>Aeai</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2021 Erik Takakura-Zajac</Copyright>
+    <RepositoryUrl>https://github.com/aeai/detekonai-networking.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/aeai/detekonai-networking</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.1" />
+  </ItemGroup>
+
+</Project>
