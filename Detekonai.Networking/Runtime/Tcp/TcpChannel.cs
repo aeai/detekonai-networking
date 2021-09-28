@@ -41,7 +41,6 @@ namespace Detekonai.Networking
 		public event LogHandler Logger;
 		public event ICommChannel.CommChannelChangeHandler OnRequestSent;
         public event ICommChannel.RequestReceivedHandler OnRequestReceived;
-        public event ICommChannel.RawDataReceiveHandler OnRawDataReceived;
 		public RawDataReceiveHandler RawDataReceiver { get; set; } = null;
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
