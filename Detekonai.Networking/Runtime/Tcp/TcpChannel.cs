@@ -40,7 +40,7 @@ namespace Detekonai.Networking
 		public event ICommChannel.BlobReceivedHandler OnBlobReceived;
 		public event LogHandler Logger;
 		public event ICommChannel.CommChannelChangeHandler OnRequestSent;
-        public event ICommChannel.RequestReceivedHandler OnRequestReceived;
+		public RequestReceivedHandler RequestHandler { get; set; } = null;
 		public RawDataReceiveHandler RawDataReceiver { get; set; } = null;
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
@@ -265,7 +265,7 @@ namespace Detekonai.Networking
 							}
 							else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
 							{
-								BinaryBlob response = OnRequestReceived?.Invoke(this, blob);
+								BinaryBlob response = RequestHandler?.Invoke(this, blob);
 								if (response != null)
 								{
 									response.AddUShort(token.index);

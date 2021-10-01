@@ -39,7 +39,7 @@ namespace Detekonai.Networking
 
 		// these will block so be fast
 		event BlobReceivedHandler OnBlobReceived;
-		event RequestReceivedHandler OnRequestReceived;
+		RequestReceivedHandler RequestHandler { get; set; }
 		RawDataReceiveHandler RawDataReceiver { get; set; }
 
 		event CommChannelChangeHandler OnRequestSent;
