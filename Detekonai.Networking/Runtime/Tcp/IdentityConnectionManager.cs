@@ -16,7 +16,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 {
     public class IdentityConnectionManager : ITcpConnectionManager
     {
-        private readonly TcpServer server;
         private readonly SocketAsyncEventArgsPool eventPool;
         private readonly IAsyncEventCommStrategy strategy;
         private readonly ICommChannelFactory<TcpChannel> factory;
@@ -26,9 +25,8 @@ namespace Detekonai.Networking.Runtime.Tcp
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
         public event ILogCapable.LogHandler Logger;
         public int ReconnectTimeoutMillis { get; set; } = -1;
-        public IdentityConnectionManager(TcpServer server, SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
+        public IdentityConnectionManager(SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
         {
-            this.server = server;
             eventPool = evPool;
             strategy = eventHandlingStrategy;
             this.factory = factory;

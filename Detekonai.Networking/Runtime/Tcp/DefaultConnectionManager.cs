@@ -10,18 +10,16 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
-    class DefaultConnectionManager : ITcpConnectionManager
+    public class DefaultConnectionManager : ITcpConnectionManager
     {
-        private readonly TcpServer server;
         private readonly ICommChannelFactory<TcpChannel> factory;
 
         public event ILogCapable.LogHandler Logger;
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
 
         private int counter = 0;
-        public DefaultConnectionManager(TcpServer server, ICommChannelFactory<TcpChannel> factory)
+        public DefaultConnectionManager(ICommChannelFactory<TcpChannel> factory)
         {
-            this.server = server;
             this.factory = factory;
         }
 

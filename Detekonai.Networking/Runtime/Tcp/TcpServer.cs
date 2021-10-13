@@ -10,18 +10,16 @@ namespace Detekonai.Networking.Runtime.Tcp
 {
 	public class TcpServer : ILogCapable
 	{
-		private SocketAsyncEventArgsPool eventPool;
-		private BinaryBlobPool bufferPool;
+		private readonly SocketAsyncEventArgsPool eventPool;
 
 		private Socket serverSocket = null;
-		private IPEndPoint tcpEndpoint;
+		private readonly IPEndPoint tcpEndpoint;
 
 		public ICommChannel.EChannelStatus Status { get; private set; } = ICommChannel.EChannelStatus.Closed;
-		private IAsyncEventCommStrategy eventStrategy;
-		private readonly ICommChannelFactory<TcpChannel> factory;
-		
+		private readonly IAsyncEventCommStrategy eventStrategy;	
 		public event ILogCapable.LogHandler Logger;
 		public ITcpConnectionManager ConnectionManager { get; set; } = null;
+
 		public int ListeningPort
 		{
 			get
@@ -30,21 +28,13 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 
 		}
-		public string Name
-		{
-			get
-			{
-				return "Server";
-			}
-		}
-		public TcpServer(int listeningPort, SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
+
+		public TcpServer(int listeningPort, SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ITcpConnectionManager manager)
 		{
 			eventPool = evPool;
-			bufferPool = blobPool;
 			tcpEndpoint = new IPEndPoint(IPAddress.Any, listeningPort);
 			eventStrategy = eventHandlingStrategy;
-			this.factory = factory;
-			ConnectionManager = new DefaultConnectionManager(this, factory);
+			ConnectionManager = manager;
 		}
 
 		public void CloseChannel()
@@ -90,42 +80,13 @@ namespace Detekonai.Networking.Runtime.Tcp
 			CloseChannel();
 		}
 
-		//private void AssignChannel(SocketAsyncEventArgs e, string id)
-  //      {
-		//	Socket sock = (e.UserToken as CommToken).ownerSocket;
-			
-		//	Logger?.Invoke(this, $"Assigning id: {id}", ILogCapable.LogLevel.Verbose);
-		//	TcpChannel ch = factory.Create();
-		//	ch.Name = $"CLIENT:{((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}";
-		//	ch.AssignSocket(sock);
-		//	OnClientAccepted?.Invoke(ch);
-		//	Logger?.Invoke(this, $"TCP channel assigned {tcpEndpoint.Address}:{tcpEndpoint.Port} and {ch.Name}", ILogCapable.LogLevel.Verbose);
-		//}
-
 		public void HandleEvent(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
 		{
 			if(e.LastOperation == SocketAsyncOperation.Accept)
 			{
 				if (e.SocketError == SocketError.Success)
 				{
-
-					//if (reconnectPolicy != null)
-					//{
-					//	SocketAsyncEventArgs evt = eventPool.Take(null, eventStrategy, null, HandleEvent);
-					//	Logger?.Invoke(this, $"Evt1 {evt.LastOperation}", ILogCapable.LogLevel.Verbose);
-					//	eventPool.ConfigureSocketToRead(bufferPool.GetBlob(), evt);
-					//	(evt.UserToken as CommToken).ownerSocket = e.AcceptSocket;
-					//	if(!e.AcceptSocket.ReceiveAsync(evt))
-					//                   {
-					//		eventStrategy.EnqueueEvent(evt);
-					//                   }
-					//}
-					//else
-					//{
-					//	AssignChannel(e, null);
-					//}
 					ConnectionManager.OnAccept(e);
-					//Logger?.Invoke(this, $"TCP channel estabilished between host {tcpEndpoint.Address}:{tcpEndpoint.Port}", ILogCapable.LogLevel.Verbose);
 				}
 				else
                 {
