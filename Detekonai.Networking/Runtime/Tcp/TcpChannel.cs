@@ -1,5 +1,6 @@
 ﻿using Detekonai.Core;
 using Detekonai.Networking.Runtime.AsyncEvent;
+using Detekonai.Networking.Runtime.Strategy;
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -31,24 +32,17 @@ namespace Detekonai.Networking
 		private SocketAsyncEventArgsPool eventPool;
 		private BinaryBlobPool bufferPool;
 		private BinaryBlobPool largeBlobPool;
-		private IPEndPoint endpoint;
 		private int bytesNeeded = headerSize;
 		private ushort msgIndex = 1;
 		private EReadingMode readingMode = EReadingMode.Header;
-
-		public event ICommChannel.CommChannelChangeHandler OnConnectionStatusChanged;
-		public event ICommChannel.BlobReceivedHandler OnBlobReceived;
 		public event LogHandler Logger;
-		public event ICommChannel.CommChannelChangeHandler OnRequestSent;
-		public RequestReceivedHandler RequestHandler { get; set; } = null;
-		public RawDataReceiveHandler RawDataReceiver { get; set; } = null;
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
-		private IAsyncEventHandlingStrategy eventHandlingStrategy;
-		private IAsyncEventHandlingTactics eventHandlingTactics;
+		private IAsyncEventCommStrategy eventHandlingStrategy;
+		public ICommTactics Tactics { get; private set; }
+		public IPEndPoint Endpoint { get; private set; }
 
 		public bool Reliable => true;
-
 		public string Name { get; set; }
 		public ICommChannel.EChannelMode Mode { get; set; } = ICommChannel.EChannelMode.Managed;
 		public ICommChannel.EChannelStatus Status
@@ -62,50 +56,44 @@ namespace Detekonai.Networking
 				if(value != status)
 				{
 					status = value;
-					OnConnectionStatusChanged?.Invoke(this);
+					Tactics.StatusChanged();
 				}
 			}
 		}
 
 
-        public TcpChannel(IPEndPoint endpoint, IAsyncEventHandlingStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool)
+        public TcpChannel(IPEndPoint endpoint, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool)
 		{
-			this.endpoint = endpoint;
+			this.Endpoint = endpoint;
 			this.eventPool = eventPool;
 			this.bufferPool = bufferPool;
 			this.largeBlobPool = largeBlobPool;
 			this.eventHandlingStrategy = eventHandlingStrategy;
-			eventHandlingTactics = eventHandlingStrategy.RegisterChannel(this);
+			Tactics = eventHandlingStrategy.RegisterChannel(this);
 		}
 
-		public TcpChannel(IAsyncEventHandlingStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(null, eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
+		public TcpChannel(IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(null, eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
 		{
 		}
 
-		public TcpChannel(string ip, int port, IAsyncEventHandlingStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(new IPEndPoint(IPAddress.Parse(ip), port), eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
+		public TcpChannel(string ip, int port, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(new IPEndPoint(IPAddress.Parse(ip), port), eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
 		{
 		}
 
 
 		public void AssignSocket(Socket socket)
 		{
+			if (client != null)
 			{
-				if (endpoint == null)
-				{
-					if (socket != null)
-					{
-						var rend = (IPEndPoint)socket.RemoteEndPoint;
-						Status = ICommChannel.EChannelStatus.Open;
-						Logger?.Invoke(this, "Channel opened with socket assginemnt", ICommChannel.LogLevel.Info);
-					}
-					else
-					{
-						CloseChannel();
-					}
-					client = socket;
-					ReceiveData(headerSize);
-				}
+				CloseChannel();
 			}
+			var rend = (IPEndPoint)socket.RemoteEndPoint;
+			Endpoint = rend;
+			client = socket;
+			Status = ICommChannel.EChannelStatus.Open;
+			Logger?.Invoke(this, "Channel opened with socket assignment", ICommChannel.LogLevel.Info);
+
+			ReceiveData(headerSize);
 		}
 
 
@@ -116,7 +104,7 @@ namespace Detekonai.Networking
 			{
 				Logger?.Invoke(this, "Channel closed", LogLevel.Verbose);
 			}
-			eventHandlingTactics.CancelAllRequests();
+			Tactics.CancelAllRequests();
 			client?.Close();
 			client?.Dispose();
 			client = null;
@@ -126,7 +114,7 @@ namespace Detekonai.Networking
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
 		public UniversalAwaitable<bool> OpenChannel()
 		{
-			if(endpoint == null)
+			if(Endpoint == null)
 			{
 				Logger?.Invoke(this, "The channel address is not set, can't open the channel!", LogLevel.Error);
 				throw new InvalidOperationException("The channel address is not set, can't open the channel!");
@@ -134,9 +122,9 @@ namespace Detekonai.Networking
 			msgIndex = 1;
 			client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			Status = ICommChannel.EChannelStatus.Establishing;
-			SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, HandleEvent);
-			evt.RemoteEndPoint = endpoint;
-			IUniversalAwaiter<bool> res = eventHandlingTactics.CreateOpenAwaiter();
+			SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
+			evt.RemoteEndPoint = Endpoint;
+			IUniversalAwaiter<bool> res = Tactics.CreateOpenAwaiter();
 			if(!client.ConnectAsync(evt))
 			{
 				eventHandlingStrategy.EnqueueEvent(evt);
@@ -181,10 +169,7 @@ namespace Detekonai.Networking
 				{
 					Status = ICommChannel.EChannelStatus.Closed;
 					Logger?.Invoke(this, $"Channel closed becuase error: {e.SocketError}", ICommChannel.LogLevel.Error);
-					Console.WriteLine($"Channel closed becuase error: {e.SocketError}");
 				}
-
-				eventHandlingTactics.SignalOpenChannel();
 			}
 			else if(e.LastOperation == SocketAsyncOperation.Receive)
 			{
@@ -213,7 +198,7 @@ namespace Detekonai.Networking
 				else
 				{
 					Logger?.Invoke(this, $"Sent: {e.BytesTransferred}", ICommChannel.LogLevel.Info);
-					OnRequestSent?.Invoke(this);
+					Tactics.RequestSent();
 				}
 			}
 			eventPool.Release(e);
@@ -261,11 +246,11 @@ namespace Detekonai.Networking
 								ushort ackIndex = blob.ReadUShort();
 								blob.Index = msgStart;
 								token.blob = null;//don't release the blob we need to keep it around for TAP, we release later
-								eventHandlingTactics.EnqueueResponse(ackIndex, blob);
+								Tactics.EnqueueResponse(ackIndex, blob);
 							}
 							else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
 							{
-								BinaryBlob response = RequestHandler?.Invoke(this, blob);
+								BinaryBlob response = Tactics.RequestHandler?.Invoke(this, blob);
 								if (response != null)
 								{
 									response.AddUShort(token.index);
@@ -278,7 +263,7 @@ namespace Detekonai.Networking
 							}
 							else
 							{
-								OnBlobReceived?.Invoke(this, blob);
+								Tactics.BlobRecieved(blob);
 							}
 
 							readingMode = EReadingMode.Header;
@@ -317,7 +302,7 @@ namespace Detekonai.Networking
 				}
 				else
 				{
-					bytesNeeded = RawDataReceiver.Invoke(channel, blob, e.BytesTransferred);
+					bytesNeeded = Tactics.RawDataReceiver.Invoke(channel, blob, e.BytesTransferred);
 					if (bytesNeeded == 0)
 					{
 						bytesNeeded = bufferPool.BlobSize;
@@ -392,12 +377,12 @@ namespace Detekonai.Networking
 				}
 				msgIndex++;
 				blob.JumpIndexToBegin();
-				SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, HandleEvent);
+				SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 				eventPool.ConfigureSocketToWrite(blob, evt);
 				//we need this after we have the sent index but before the actuall sending or we may end up having the answer before we have the TCS
 				if ((flags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
 				{
-					returnVal = eventHandlingTactics.CreateResponseAwaiter(sentIndex);
+					returnVal = Tactics.CreateResponseAwaiter(sentIndex);
 				}
 				if (!client.SendAsync(evt))
 				{
@@ -422,7 +407,7 @@ namespace Detekonai.Networking
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
 		private void ReceiveData(int size)
 		{
-            var evt = eventPool.Take(this, eventHandlingStrategy, HandleEvent);
+            var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 			BinaryBlob blob = size <= bufferPool.BlobSize ? bufferPool.GetBlob() : largeBlobPool.GetBlob();
 			
 			eventPool.ConfigureSocketToRead(blob, evt, size);
@@ -453,7 +438,7 @@ namespace Detekonai.Networking
 		public void Dispose()
 		{
 			CloseChannel();
-			eventHandlingStrategy.UnregisterChannel(eventHandlingTactics);
+			Tactics.Shutdown();
 		}
 	}
 }

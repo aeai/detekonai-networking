@@ -1,32 +1,28 @@
 ﻿using Detekonai.Core;
 using Detekonai.Core.Common;
 using Detekonai.Networking.Runtime.AsyncEvent;
+using Detekonai.Networking.Runtime.Strategy;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 
-namespace Detekonai.Networking.Runtime
+namespace Detekonai.Networking.Runtime.Tcp
 {
 	public class TcpServer : ILogCapable
 	{
-
-
-		//private List<TcpChannel> clients = new List<TcpChannel>();
-
 		private SocketAsyncEventArgsPool eventPool;
 		private BinaryBlobPool bufferPool;
 
 		private Socket serverSocket = null;
 		private IPEndPoint tcpEndpoint;
 
-		public delegate void ClientAccepted(TcpChannel client);
-		public event ClientAccepted OnClientAccepted;
-		public event ILogCapable.LogHandler Logger;
 		public ICommChannel.EChannelStatus Status { get; private set; } = ICommChannel.EChannelStatus.Closed;
-		public IAsyncEventHandlingStrategy eventStrategy;
-        private readonly ICommChannelFactory<TcpChannel> factory;
-
-        public int ListeningPort
+		private IAsyncEventCommStrategy eventStrategy;
+		private readonly ICommChannelFactory<TcpChannel> factory;
+		
+		public event ILogCapable.LogHandler Logger;
+		public ITcpConnectionManager ConnectionManager { get; set; } = null;
+		public int ListeningPort
 		{
 			get
 			{
@@ -41,13 +37,14 @@ namespace Detekonai.Networking.Runtime
 				return "Server";
 			}
 		}
-		public TcpServer(int listeningPort, SocketAsyncEventArgsPool evPool, IAsyncEventHandlingStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
+		public TcpServer(int listeningPort, SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
 		{
 			eventPool = evPool;
 			bufferPool = blobPool;
 			tcpEndpoint = new IPEndPoint(IPAddress.Any, listeningPort);
 			eventStrategy = eventHandlingStrategy;
-            this.factory = factory;
+			this.factory = factory;
+			ConnectionManager = new DefaultConnectionManager(this, factory);
 		}
 
 		public void CloseChannel()
@@ -76,8 +73,7 @@ namespace Detekonai.Networking.Runtime
 
 		private void Accept()
 		{
-			TcpChannel channel = factory.Create();
-			SocketAsyncEventArgs evt = eventPool.Take(channel, eventStrategy, HandleEvent);
+			SocketAsyncEventArgs evt = eventPool.Take(null, eventStrategy, null, HandleEvent);
 			evt.AcceptSocket = null;
 			if (serverSocket != null)
 			{
@@ -94,19 +90,42 @@ namespace Detekonai.Networking.Runtime
 			CloseChannel();
 		}
 
+		//private void AssignChannel(SocketAsyncEventArgs e, string id)
+  //      {
+		//	Socket sock = (e.UserToken as CommToken).ownerSocket;
+			
+		//	Logger?.Invoke(this, $"Assigning id: {id}", ILogCapable.LogLevel.Verbose);
+		//	TcpChannel ch = factory.Create();
+		//	ch.Name = $"CLIENT:{((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}";
+		//	ch.AssignSocket(sock);
+		//	OnClientAccepted?.Invoke(ch);
+		//	Logger?.Invoke(this, $"TCP channel assigned {tcpEndpoint.Address}:{tcpEndpoint.Port} and {ch.Name}", ILogCapable.LogLevel.Verbose);
+		//}
+
 		public void HandleEvent(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
 		{
 			if(e.LastOperation == SocketAsyncOperation.Accept)
 			{
 				if (e.SocketError == SocketError.Success)
 				{
-					if (channel is TcpChannel ch)
-					{
-						ch.Name = $"CLIENT:{((IPEndPoint)e.AcceptSocket.RemoteEndPoint).Address}:{((IPEndPoint)e.AcceptSocket.RemoteEndPoint).Port}";
-						ch.AssignSocket(e.AcceptSocket);
-						OnClientAccepted?.Invoke(ch);
-						Logger?.Invoke(this, $"TCP channel estabilished between host {tcpEndpoint.Address}:{tcpEndpoint.Port} and {ch.Name}", ILogCapable.LogLevel.Verbose);
-					}
+
+					//if (reconnectPolicy != null)
+					//{
+					//	SocketAsyncEventArgs evt = eventPool.Take(null, eventStrategy, null, HandleEvent);
+					//	Logger?.Invoke(this, $"Evt1 {evt.LastOperation}", ILogCapable.LogLevel.Verbose);
+					//	eventPool.ConfigureSocketToRead(bufferPool.GetBlob(), evt);
+					//	(evt.UserToken as CommToken).ownerSocket = e.AcceptSocket;
+					//	if(!e.AcceptSocket.ReceiveAsync(evt))
+					//                   {
+					//		eventStrategy.EnqueueEvent(evt);
+					//                   }
+					//}
+					//else
+					//{
+					//	AssignChannel(e, null);
+					//}
+					ConnectionManager.OnAccept(e);
+					//Logger?.Invoke(this, $"TCP channel estabilished between host {tcpEndpoint.Address}:{tcpEndpoint.Port}", ILogCapable.LogLevel.Verbose);
 				}
 				else
                 {
@@ -114,7 +133,6 @@ namespace Detekonai.Networking.Runtime
 				}
 				Accept();
 			}
-
 			eventPool.Release(e);
 		}
 	}

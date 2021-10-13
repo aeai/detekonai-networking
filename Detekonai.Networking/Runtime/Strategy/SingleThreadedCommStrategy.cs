@@ -1,27 +1,28 @@
 ﻿using Detekonai.Core;
+using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
-using static Detekonai.Networking.Runtime.AsyncEvent.IAsyncEventHandlingStrategy;
 
-namespace Detekonai.Networking.Runtime.AsyncEvent
+namespace Detekonai.Networking.Runtime.Strategy
 {
-    public class SingleThreadedAsyncEventStrategy : IAsyncEventHandlingStrategy
+    public class SingleThreadedCommStrategy : IAsyncEventCommStrategy
 	{
 		private readonly ConcurrentQueue<SocketAsyncEventArgs> callbackQueue = new ConcurrentQueue<SocketAsyncEventArgs>();
         private Action OnProcess;
 
-        public IAsyncEventHandlingTactics RegisterChannel(ICommChannel channel)
+        public ICommTactics RegisterChannel(ICommChannel channel)
         {
-            SingleThreadedAsyncEventTactics tac = new SingleThreadedAsyncEventTactics(channel);
+            SingleThreadedCommTactics tac = new SingleThreadedCommTactics(channel);
             OnProcess += tac.Process;
+            tac.OnTacticsCompleted += UnregisterChannel;
             return tac;
         }
 
-        public void UnregisterChannel(IAsyncEventHandlingTactics channelTactics)
+        public void UnregisterChannel(ICommTactics channelTactics)
         {
-            
-            OnProcess -= (channelTactics as SingleThreadedAsyncEventTactics).Process;
+            channelTactics.OnTacticsCompleted -= UnregisterChannel;
+            OnProcess -= (channelTactics as SingleThreadedCommTactics).Process;
         }
 
         public void EnqueueEvent(SocketAsyncEventArgs evt)
@@ -37,11 +38,10 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 				{
 					if (e.UserToken is CommToken comm)
 					{
-						comm.callback(comm.owner, comm.blob, e);
+						comm.callback(comm.ownerChannel, comm.blob, e);
 					}
 				}
 			}
-
 
             OnProcess?.Invoke();
         }

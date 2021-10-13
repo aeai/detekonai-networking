@@ -1,4 +1,5 @@
 ﻿using Detekonai.Core;
+using Detekonai.Networking.Runtime.Strategy;
 using System;
 using System.Net.Sockets;
 
@@ -16,11 +17,13 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 			RpcAck = 8
 		}
 
-		public ICommChannel owner;
+		public ICommChannel ownerChannel;
+		public Socket ownerSocket;
 		public HeaderFlags headerFlags;
 		public ushort index;
 		public int msgSize;
-		public IAsyncEventHandlingStrategy strategy;
+		public IAsyncEventCommStrategy strategy;
+		public ICommTactics tactics;
 		public Action<ICommChannel, BinaryBlob, SocketAsyncEventArgs> callback;
 		public BinaryBlob blob;
 

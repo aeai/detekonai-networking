@@ -1,4 +1,5 @@
 ﻿using Detekonai.Core;
+using Detekonai.Networking.Runtime.Strategy;
 using System;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
@@ -9,7 +10,7 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 	{
 		private ConcurrentBag<SocketAsyncEventArgs> pool = new ConcurrentBag<SocketAsyncEventArgs>();
 
-		public SocketAsyncEventArgs Take(ICommChannel owner, IAsyncEventHandlingStrategy eventHandlingStrategy, Action<ICommChannel, BinaryBlob, SocketAsyncEventArgs> callback)
+		public SocketAsyncEventArgs Take(ICommChannel owner, IAsyncEventCommStrategy eventHandlingStrategy, ICommTactics tactics, Action<ICommChannel, BinaryBlob, SocketAsyncEventArgs> callback)
 		{
 			pool.TryTake(out SocketAsyncEventArgs args);
 			if(args == null)
@@ -22,10 +23,11 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 
 			}
 			var t = (CommToken)args.UserToken;
-			t.owner = owner;
+			t.ownerChannel = owner;
 			t.blob = null;
 			t.callback = callback;
 			t.strategy = eventHandlingStrategy;
+			t.tactics = tactics;
 			return args;
 		}
 
@@ -53,8 +55,11 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 		{
 			var t = (CommToken)args.UserToken;
 			t.blob?.Release();
-			t.owner = null;
+			t.ownerChannel = null;
+			t.ownerSocket = null;
 			t.blob = null;
+			t.strategy = null;
+			t.tactics = null;
 			args.AcceptSocket = null;
 			args.SetBuffer(null, 0, 0);
 			args.SocketFlags = SocketFlags.None;
