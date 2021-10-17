@@ -114,7 +114,12 @@ namespace Detekonai.Networking.Runtime.Strategy
 
         public void BlobRecieved(BinaryBlob e)
         {
-            OnBlobReceived?.Invoke(Owner, e);
+            int startIdx = e.Index;
+            foreach (ICommTactics.BlobReceivedHandler del in OnBlobReceived.GetInvocationList())
+            {
+                e.Index = startIdx;
+                del(Owner, e);
+            }
         }
 
         public void RequestSent()

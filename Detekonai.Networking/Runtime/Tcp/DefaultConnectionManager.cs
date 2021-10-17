@@ -32,5 +32,6 @@ namespace Detekonai.Networking.Runtime.Tcp
             OnClientAccepted?.Invoke(ch);
             Logger?.Invoke(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogCapable.LogLevel.Verbose);
         }
+
     }
 }

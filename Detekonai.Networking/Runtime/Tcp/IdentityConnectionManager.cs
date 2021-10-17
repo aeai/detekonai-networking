@@ -128,9 +128,15 @@ namespace Detekonai.Networking.Runtime.Tcp
                 }
                 else
                 {
+                    if (e.UserToken is CommToken token)
+                    {
+                        token.ownerSocket.Dispose();
+                    }
                     Logger?.Invoke(this, $"Error accepting socket identity: {e.SocketError}", ILogCapable.LogLevel.Error);
+                    
                 }
             }
+            eventPool.Release(e);
         }
     }
 }
