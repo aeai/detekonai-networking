@@ -35,11 +35,16 @@ namespace Detekonai.Networking.Runtime.Tcp
 
         private async void PurgeAfter(string id, int millis, CancellationToken token)
         {
-            await Task.Delay(millis, token);
-            if(!token.IsCancellationRequested)
+            try
             {
-                PurgeChannel(id);
+                await Task.Delay(millis, token);
+                if(!token.IsCancellationRequested)
+                {
+                    PurgeChannel(id);
+                }
             }
+            catch(OperationCanceledException)
+            {}
         }
 
         public void PurgeChannel(string id)
