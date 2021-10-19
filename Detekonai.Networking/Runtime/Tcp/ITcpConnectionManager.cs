@@ -8,10 +8,11 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
-    public interface ITcpConnectionManager : ILogCapable
+    public interface ITcpConnectionManager
     {
         public delegate void ClientAccepted(TcpChannel client);
         public event ClientAccepted OnClientAccepted;
         public void OnAccept(SocketAsyncEventArgs evt);
+        public ILogConnector Logger { get; set; }
     }
 }

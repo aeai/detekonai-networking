@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,10 +15,12 @@ namespace Detekonai.Networking.Runtime.Tcp
     {
         private readonly ICommChannelFactory<TcpChannel> factory;
 
-        public event ILogCapable.LogHandler Logger;
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
 
         private int counter = 0;
+
+        public ILogConnector Logger { get; set; } = null;
+
         public DefaultConnectionManager(ICommChannelFactory<TcpChannel> factory)
         {
             this.factory = factory;
@@ -30,7 +33,7 @@ namespace Detekonai.Networking.Runtime.Tcp
             ch.Name = $"Channel-{id}";
             ch.AssignSocket(evt.AcceptSocket);
             OnClientAccepted?.Invoke(ch);
-            Logger?.Invoke(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogCapable.LogLevel.Verbose);
+            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
         }
 
     }

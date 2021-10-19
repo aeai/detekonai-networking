@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace Detekonai.Networking
 {
 
-	public interface ICommChannel : ILogCapable, IDisposable
+	public interface ICommChannel : IDisposable
 	{
 		public enum EChannelStatus
 		{
@@ -29,12 +29,13 @@ namespace Detekonai.Networking
 		UniversalAwaitable<bool> OpenChannel();
 		UniversalAwaitable<bool> OpenChannel(CancellationToken cancelationToken);
 		BinaryBlob CreateMessage(bool raw = false);
-		
+
 		void Send(BinaryBlob blob);
 		ICommTactics Tactics { get; }
 		UniversalAwaitable<ICommResponse> SendRPC(BinaryBlob blob);
 		UniversalAwaitable<ICommResponse> SendRPC(BinaryBlob blob, CancellationToken cancelationToken);
 
+		public ILogConnector Logger {get; set;}
 		EChannelStatus Status { get; }
 		string Name { get; set; }
 		bool Reliable { get; }

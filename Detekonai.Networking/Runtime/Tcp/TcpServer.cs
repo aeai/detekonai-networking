@@ -8,7 +8,7 @@ using System.Net.Sockets;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
-	public class TcpServer : ILogCapable
+	public class TcpServer
 	{
 		private readonly SocketAsyncEventArgsPool eventPool;
 
@@ -16,8 +16,8 @@ namespace Detekonai.Networking.Runtime.Tcp
 		private readonly IPEndPoint tcpEndpoint;
 
 		public ICommChannel.EChannelStatus Status { get; private set; } = ICommChannel.EChannelStatus.Closed;
-		private readonly IAsyncEventCommStrategy eventStrategy;	
-		public event ILogCapable.LogHandler Logger;
+		private readonly IAsyncEventCommStrategy eventStrategy;
+		public ILogConnector Logger { get; set; }
 		public ITcpConnectionManager ConnectionManager { get; set; } = null;
 
 		public int ListeningPort
@@ -42,7 +42,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			serverSocket?.Close();
 			serverSocket?.Dispose();
 			serverSocket = null;
-			Logger?.Invoke(this, $"TCP server closed {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogCapable.LogLevel.Info);
+			Logger?.Log(this, $"TCP server closed {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
 			Status = ICommChannel.EChannelStatus.Closed;
 		}
 
@@ -56,7 +56,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			serverSocket.Bind(tcpEndpoint);
 			serverSocket.Listen(10000);
-			Logger?.Invoke(this, $"TCP channel opening for host {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogCapable.LogLevel.Info);
+			Logger?.Log(this, $"TCP channel opening for host {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
 			Status = ICommChannel.EChannelStatus.Open;
 			Accept();
 		}
@@ -76,7 +76,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		public void Dispose()
 		{
-			Logger?.Invoke(this, $"TCP channel disposed for host {tcpEndpoint.Address.ToString()} and port {tcpEndpoint.Port}", ILogCapable.LogLevel.Info);
+			Logger?.Log(this, $"TCP channel disposed for host {tcpEndpoint.Address.ToString()} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
 			CloseChannel();
 		}
 
@@ -90,7 +90,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				}
 				else
                 {
-					Logger?.Invoke(this, $"Error accepting socket: {e.SocketError}", ILogCapable.LogLevel.Error);
+					Logger?.Log(this, $"Error accepting socket: {e.SocketError}", ILogConnector.LogLevel.Error);
 				}
 				Accept();
 			}

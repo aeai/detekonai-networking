@@ -1,11 +1,12 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Strategy;
 using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using static Detekonai.Core.Common.ILogCapable;
+using static Detekonai.Core.Common.ILogConnector;
 using static Detekonai.Networking.ICommChannel;
 
 namespace Detekonai.Networking
@@ -35,7 +36,7 @@ namespace Detekonai.Networking
 		private int bytesNeeded = headerSize;
 		private ushort msgIndex = 1;
 		private EReadingMode readingMode = EReadingMode.Header;
-		public event LogHandler Logger;
+		public ILogConnector Logger { get; set; }
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
 		private IAsyncEventCommStrategy eventHandlingStrategy;
@@ -91,7 +92,7 @@ namespace Detekonai.Networking
 			Endpoint = rend;
 			client = socket;
 			Status = ICommChannel.EChannelStatus.Open;
-			Logger?.Invoke(this, "Channel opened with socket assignment", ICommChannel.LogLevel.Info);
+			Logger?.Log(this, "Channel opened with socket assignment", LogLevel.Info);
 
 			ReceiveData(headerSize);
 		}
@@ -102,7 +103,7 @@ namespace Detekonai.Networking
 		{
 			if (client != null)
 			{
-				Logger?.Invoke(this, "Channel closed", LogLevel.Verbose);
+				Logger?.Log(this, "Channel closed", LogLevel.Verbose);
 			}
 			Tactics.CancelAllRequests();
 			client?.Close();
@@ -116,7 +117,7 @@ namespace Detekonai.Networking
 		{
 			if(Endpoint == null)
 			{
-				Logger?.Invoke(this, "The channel address is not set, can't open the channel!", LogLevel.Error);
+				Logger?.Log(this, "The channel address is not set, can't open the channel!", LogLevel.Error);
 				throw new InvalidOperationException("The channel address is not set, can't open the channel!");
 			}
 			msgIndex = 1;
@@ -161,14 +162,14 @@ namespace Detekonai.Networking
 			{
 				if(e.SocketError == SocketError.Success)
 				{
-					Logger?.Invoke(this, "Channel open", ICommChannel.LogLevel.Info);
+					Logger?.Log(this, "Channel open", LogLevel.Info);
 					ReceiveData(headerSize);
 					Status = ICommChannel.EChannelStatus.Open;
 				}
 				else
 				{
 					Status = ICommChannel.EChannelStatus.Closed;
-					Logger?.Invoke(this, $"Channel closed becuase error: {e.SocketError}", ICommChannel.LogLevel.Error);
+					Logger?.Log(this, $"Channel closed becuase error: {e.SocketError}", LogLevel.Error);
 				}
 			}
 			else if(e.LastOperation == SocketAsyncOperation.Receive)
@@ -193,11 +194,11 @@ namespace Detekonai.Networking
 				if (e.SocketError != SocketError.Success)
 				{
 					CloseChannel();
-					Logger?.Invoke(this, $"Closing channel becuase error: {e.SocketError}", ICommChannel.LogLevel.Error);
+					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
 				}
 				else
 				{
-					Logger?.Invoke(this, $"Sent: {e.BytesTransferred}", ICommChannel.LogLevel.Info);
+					Logger?.Log(this, $"Sent: {e.BytesTransferred}", LogLevel.Info);
 					Tactics.RequestSent();
 				}
 			}
@@ -211,7 +212,7 @@ namespace Detekonai.Networking
 				if (e.BytesTransferred == 0)
 				{
 					CloseChannel();
-					Logger?.Invoke(this, $"Closing channel becuase recevied EOS", ICommChannel.LogLevel.Info);
+					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
 				}
 				else
 				{
@@ -285,7 +286,7 @@ namespace Detekonai.Networking
 				if (status != ICommChannel.EChannelStatus.Closed)
 				{
 					CloseChannel();
-					Logger?.Invoke(this, $"Closing channel becuase error: {e.SocketError}", ICommChannel.LogLevel.Error);
+					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
 				}
 			}
 			return false;
@@ -298,7 +299,7 @@ namespace Detekonai.Networking
 				if (e.BytesTransferred == 0)
 				{
 					CloseChannel();
-					Logger?.Invoke(this, $"Closing channel becuase recevied EOS", ICommChannel.LogLevel.Info);
+					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
 				}
 				else
 				{
@@ -321,7 +322,7 @@ namespace Detekonai.Networking
 				if (status != ICommChannel.EChannelStatus.Closed)
 				{
 					CloseChannel();
-					Logger?.Invoke(this, $"Closing channel becuase error: {e.SocketError}", ICommChannel.LogLevel.Error);
+					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
 				}
 			}
 			return false;
@@ -391,7 +392,7 @@ namespace Detekonai.Networking
 			}
 			else
 			{
-				Logger?.Invoke(this, "Trying to send on a closed channel!", ICommChannel.LogLevel.Error);
+				Logger?.Log(this, "Trying to send on a closed channel!", LogLevel.Error);
 			}
 			return returnVal;
 		}
