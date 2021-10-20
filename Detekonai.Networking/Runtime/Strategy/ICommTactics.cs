@@ -14,7 +14,7 @@ namespace Detekonai.Networking.Runtime.Strategy
 		public delegate void TacticsCompleted(ICommTactics tactics);
 		public delegate void CommChannelChangeHandler(ICommChannel channel);
 		public delegate int RawDataReceiveHandler(ICommChannel channel, BinaryBlob e, int bytesTransferred);
-		public delegate BinaryBlob RequestReceivedHandler(ICommChannel channel, BinaryBlob request);
+		public delegate void RequestReceivedHandler(ICommChannel channel, BinaryBlob request, IRequestTicket ticket);
 
 		public ICommChannel Owner { get; }
 		public void EnqueueResponse(ushort responseIdx, BinaryBlob blob);

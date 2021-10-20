@@ -9,7 +9,7 @@ using System.Threading;
 using static Detekonai.Core.Common.ILogConnector;
 using static Detekonai.Networking.ICommChannel;
 
-namespace Detekonai.Networking
+namespace Detekonai.Networking.Runtime.Tcp
 {
     public sealed class TcpChannel : ICommChannel
 	{
@@ -27,7 +27,26 @@ namespace Detekonai.Networking
 			Data,
 		}
 
+		private class TcpChannelRequestTicket : IRequestTicket
+		{
+			private readonly TcpChannel channel;
+			private readonly ushort msgIdx;
 
+			public TcpChannelRequestTicket(TcpChannel channel, ushort msgIdx)
+			{
+				this.channel = channel;
+				this.msgIdx = msgIdx;
+			}
+
+			public void Fulfill(BinaryBlob blob)
+			{
+				if (blob != null)
+				{
+					blob.AddUShort(msgIdx);
+					channel.Send(blob, CommToken.HeaderFlags.RpcAck);
+				}
+			}
+		}
 
 		private Socket client;
 		private SocketAsyncEventArgsPool eventPool;
@@ -251,12 +270,7 @@ namespace Detekonai.Networking
 							}
 							else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
 							{
-								BinaryBlob response = Tactics.RequestHandler?.Invoke(this, blob);
-								if (response != null)
-								{
-									response.AddUShort(token.index);
-									Send(response, CommToken.HeaderFlags.RpcAck);
-								}
+								Tactics.RequestHandler?.Invoke(this, blob, new TcpChannelRequestTicket(this, token.index));
 							}
 							else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
 							{
@@ -264,6 +278,7 @@ namespace Detekonai.Networking
 							}
 							else
 							{
+								//beware: if we go async we may release the blob before the async function finishes
 								Tactics.BlobRecieved(blob);
 							}
 
