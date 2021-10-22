@@ -33,7 +33,7 @@ namespace Detekonai.Networking.Runtime.Tcp
             ch.Name = $"Channel-{id}";
             ch.AssignSocket(evt.AcceptSocket);
             OnClientAccepted?.Invoke(ch);
-            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.AcceptSocket.RemoteEndPoint).Address}:{((IPEndPoint)evt.AcceptSocket.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
         }
 
     }

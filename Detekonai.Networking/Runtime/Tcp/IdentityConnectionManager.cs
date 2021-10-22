@@ -25,6 +25,7 @@ namespace Detekonai.Networking.Runtime.Tcp
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
         public ILogConnector Logger { get; set; } = null;
         public int ReconnectTimeoutMillis { get; set; } = -1;
+        public int IdTokenSize { get; set; } = 8;
         public IdentityConnectionManager(SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
         {
             eventPool = evPool;
@@ -63,7 +64,7 @@ namespace Detekonai.Networking.Runtime.Tcp
         public void OnAccept(SocketAsyncEventArgs evt)
         {
             SocketAsyncEventArgs queryEvt = eventPool.Take(null, strategy, null, HandleEvent);
-            eventPool.ConfigureSocketToRead(blobPool.GetBlob(), queryEvt);
+            eventPool.ConfigureSocketToRead(blobPool.GetBlob(), queryEvt, IdTokenSize);
             (queryEvt.UserToken as CommToken).ownerSocket = evt.AcceptSocket;
 
             if (!evt.AcceptSocket.ReceiveAsync(queryEvt))
@@ -129,7 +130,7 @@ namespace Detekonai.Networking.Runtime.Tcp
                 {
                     if (e.UserToken is CommToken token)
                     {
-                        AssignChannel(e, token.blob.ReadString());
+                        AssignChannel(e, token.blob.ReadFixedString(IdTokenSize));
                     }
                 }
                 else
