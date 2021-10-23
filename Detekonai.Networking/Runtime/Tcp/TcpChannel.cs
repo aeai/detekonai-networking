@@ -255,8 +255,8 @@ namespace Detekonai.Networking.Runtime.Tcp
 						{
 							readingMode = EReadingMode.Data;
 							uint flagsAndSize = blob.ReadUInt();
-							token.headerFlags = ((CommToken.HeaderFlags)((flagsAndSize & 0xF000) >> 12));
-							bytesNeeded = (int)(flagsAndSize & 0x0FFF);
+							token.headerFlags = ((CommToken.HeaderFlags)((flagsAndSize & 0xFF000000) >> 24));
+							bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
 							token.msgSize = bytesNeeded;
 							token.index = blob.ReadUShort();
 							if (bytesNeeded > blob.BufferSize - headerSize)
@@ -383,7 +383,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				bool headless = blob.RemoveBufferPrefix() == 0;
 				blob.JumpIndexToBegin();
 
-				uint flagAndSize = (uint)((byte)flags << 12);
+				uint flagAndSize = (uint)((byte)flags << 24);
 				flagAndSize |= (uint)(blob.BytesWritten - headerSize);
 
 				
