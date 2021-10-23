@@ -382,19 +382,12 @@ namespace Detekonai.Networking.Runtime.Tcp
 			{
 				bool headless = blob.RemoveBufferPrefix() == 0;
 				blob.JumpIndexToBegin();
-
-				uint flagAndSize = (uint)((byte)flags << 24);
-				flagAndSize |= (uint)(blob.BytesWritten - headerSize);
-
-				
-				sentIndex = msgIndex;
+				sentIndex = msgIndex++;
 				if (!headless)
 				{
-					blob.AddUInt(flagAndSize);
-					blob.AddUShort(sentIndex);
+					AddHeader(blob, flags, (uint)(blob.BytesWritten - headerSize), sentIndex);
+					blob.JumpIndexToBegin();
 				}
-				msgIndex++;
-				blob.JumpIndexToBegin();
 				SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 				eventPool.ConfigureSocketToWrite(blob, evt);
 				//we need this after we have the sent index but before the actuall sending or we may end up having the answer before we have the TCS
@@ -414,6 +407,13 @@ namespace Detekonai.Networking.Runtime.Tcp
 			return returnVal;
 		}
 
+		private void AddHeader(BinaryBlob blob, CommToken.HeaderFlags flags, uint size, ushort index)
+        {
+			uint flagAndSize = (uint)((byte)flags << 24);
+			flagAndSize |= (uint)(size);
+			blob.AddUInt(flagAndSize);
+			blob.AddUShort(index);
+		}
 
 		private void Ping() 
 		{
@@ -449,8 +449,9 @@ namespace Detekonai.Networking.Runtime.Tcp
 					ct.index = token.index;
 					ct.msgSize = token.msgSize;
 					ct.headerFlags = token.headerFlags;
+					//add back the header to make it the same format as a single-read message
+					AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
                 }
-
             }
 			if (client != null && !client.ReceiveAsync(evt))
 			{
