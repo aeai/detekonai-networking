@@ -441,7 +441,6 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
 			BinaryBlob blob = bufferPool[poolIdx].GetBlob();
 			
-			eventPool.ConfigureSocketToRead(blob, evt, size);
 			if(token != null)
             {
 				if(evt.UserToken is CommToken ct)
@@ -453,6 +452,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 					AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
                 }
             }
+			eventPool.ConfigureSocketToRead(blob, evt, size);
 			if (client != null && !client.ReceiveAsync(evt))
 			{
 				eventHandlingStrategy.EnqueueEvent(evt);
