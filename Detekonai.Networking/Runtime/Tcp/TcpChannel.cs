@@ -259,7 +259,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 							bytesNeeded = (int)(flagsAndSize & 0x0FFF);
 							token.msgSize = bytesNeeded;
 							token.index = blob.ReadUShort();
-							if ((token.headerFlags & CommToken.HeaderFlags.LargePackage) == CommToken.HeaderFlags.LargePackage)
+							if (bytesNeeded > blob.BufferSize - headerSize)
 							{
 								ReceiveData(bytesNeeded);
 							}
