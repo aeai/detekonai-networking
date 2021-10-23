@@ -57,6 +57,9 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 			t.blob?.Release();
 			t.ownerChannel = null;
 			t.ownerSocket = null;
+			t.msgSize = 0;
+			t.headerFlags = CommToken.HeaderFlags.None;
+			t.index = 0;
 			t.blob = null;
 			t.strategy = null;
 			t.tactics = null;

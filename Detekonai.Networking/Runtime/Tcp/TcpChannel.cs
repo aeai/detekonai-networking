@@ -125,7 +125,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			Status = ICommChannel.EChannelStatus.Open;
 			Logger?.Log(this, "Channel opened with socket assignment", LogLevel.Info);
 
-			ReceiveData(headerSize);
+			ReceiveData(headerSize, null);
 		}
 
 
@@ -194,7 +194,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				if(e.SocketError == SocketError.Success)
 				{
 					Logger?.Log(this, "Channel open", LogLevel.Info);
-					ReceiveData(headerSize);
+					ReceiveData(headerSize, null);
 					Status = ICommChannel.EChannelStatus.Open;
 				}
 				else
@@ -261,7 +261,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 							token.index = blob.ReadUShort();
 							if (bytesNeeded > blob.BufferSize - headerSize)
 							{
-								ReceiveData(bytesNeeded);
+								ReceiveData(bytesNeeded, token);
 							}
 							else
 							{
@@ -296,7 +296,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 							readingMode = EReadingMode.Header;
 							bytesNeeded = headerSize;
-							ReceiveData(headerSize);
+							ReceiveData(headerSize, null);
 						}
 					}
 					else
@@ -334,7 +334,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 					if (bytesNeeded == 0)
 					{
 						bytesNeeded = bufferPool[RawPoolIndex].BlobSize;
-						ReceiveData(bufferPool[RawPoolIndex].BlobSize);
+						ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
 					}
 					else
 					{
@@ -423,7 +423,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 		}
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
-		private void ReceiveData(int size)
+		private void ReceiveData(int size, CommToken token)
 		{
             var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 			int poolIdx = -1;
@@ -442,6 +442,16 @@ namespace Detekonai.Networking.Runtime.Tcp
 			BinaryBlob blob = bufferPool[poolIdx].GetBlob();
 			
 			eventPool.ConfigureSocketToRead(blob, evt, size);
+			if(token != null)
+            {
+				if(evt.UserToken is CommToken ct)
+                {
+					ct.index = token.index;
+					ct.msgSize = token.msgSize;
+					ct.headerFlags = token.headerFlags;
+                }
+
+            }
 			if (client != null && !client.ReceiveAsync(evt))
 			{
 				eventHandlingStrategy.EnqueueEvent(evt);
