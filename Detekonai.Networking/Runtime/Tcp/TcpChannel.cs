@@ -50,8 +50,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		private Socket client;
 		private SocketAsyncEventArgsPool eventPool;
-		private BinaryBlobPool bufferPool;
-		private BinaryBlobPool largeBlobPool;
+		private BinaryBlobPool[] bufferPool;
 		private int bytesNeeded = headerSize;
 		private ushort msgIndex = 1;
 		private EReadingMode readingMode = EReadingMode.Header;
@@ -62,6 +61,21 @@ namespace Detekonai.Networking.Runtime.Tcp
 		public ICommTactics Tactics { get; private set; }
 		public IPEndPoint Endpoint { get; private set; }
 
+		private int rawPoolIndex = 0;
+		public int RawPoolIndex { 
+			get 
+			{
+				return rawPoolIndex;
+			}
+			set
+			{ 
+				if(value < 0 || value >= bufferPool.Length)
+                {
+					throw new InvalidOperationException($"RawPool index {value} is outside of the [0; pool count({bufferPool.Length})] range!");
+				}
+				rawPoolIndex = value;
+			}
+		}
 		public bool Reliable => true;
 		public string Name { get; set; }
 		public ICommChannel.EChannelMode Mode { get; set; } = ICommChannel.EChannelMode.Managed;
@@ -81,22 +95,20 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 		}
 
-
-        public TcpChannel(IPEndPoint endpoint, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool)
+		public TcpChannel(IPEndPoint endpoint, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool)
 		{
 			this.Endpoint = endpoint;
 			this.eventPool = eventPool;
 			this.bufferPool = bufferPool;
-			this.largeBlobPool = largeBlobPool;
 			this.eventHandlingStrategy = eventHandlingStrategy;
 			Tactics = eventHandlingStrategy.RegisterChannel(this);
 		}
 
-		public TcpChannel(IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(null, eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
+		public TcpChannel(IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool) : this(null, eventHandlingStrategy, eventPool, bufferPool)
 		{
 		}
 
-		public TcpChannel(string ip, int port, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, BinaryBlobPool bufferPool, BinaryBlobPool largeBlobPool = null) : this(new IPEndPoint(IPAddress.Parse(ip), port), eventHandlingStrategy, eventPool, bufferPool, largeBlobPool)
+		public TcpChannel(string ip, int port, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool) : this(new IPEndPoint(IPAddress.Parse(ip), port), eventHandlingStrategy, eventPool, bufferPool)
 		{
 		}
 
@@ -321,8 +333,8 @@ namespace Detekonai.Networking.Runtime.Tcp
 					bytesNeeded = Tactics.RawDataReceiver.Invoke(channel, blob, e.BytesTransferred);
 					if (bytesNeeded == 0)
 					{
-						bytesNeeded = bufferPool.BlobSize;
-						ReceiveData(bufferPool.BlobSize);
+						bytesNeeded = bufferPool[RawPoolIndex].BlobSize;
+						ReceiveData(bufferPool[RawPoolIndex].BlobSize);
 					}
 					else
 					{
@@ -370,16 +382,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 			{
 				bool headless = blob.RemoveBufferPrefix() == 0;
 				blob.JumpIndexToBegin();
-				bool largePackage = largeBlobPool != null && blob.BytesWritten > bufferPool.BlobSize && blob.BytesWritten < largeBlobPool.BlobSize;
-				if (blob.BytesWritten > bufferPool.BlobSize && !largePackage)
-				{
-					throw new IndexOutOfRangeException($"Message size is bigger than the max limit!  {blob.BytesWritten} > Normal: {bufferPool.BlobSize} Large:{largeBlobPool?.BlobSize}");
-				}
-				
-				if(largePackage)
-                {
-					flags |= CommToken.HeaderFlags.LargePackage;
-                }
 
 				uint flagAndSize = (uint)((byte)flags << 12);
 				flagAndSize |= (uint)(blob.BytesWritten - headerSize);
@@ -424,7 +426,20 @@ namespace Detekonai.Networking.Runtime.Tcp
 		private void ReceiveData(int size)
 		{
             var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
-			BinaryBlob blob = size <= bufferPool.BlobSize ? bufferPool.GetBlob() : largeBlobPool.GetBlob();
+			int poolIdx = -1;
+			for(int i = 0; i < bufferPool.Length; i++)
+            {
+				if(size < bufferPool[i].BlobSize)
+                {
+					poolIdx = i;
+					break;
+                }
+            }
+			if(poolIdx == -1)
+            {
+				throw new InvalidOperationException($"Try to read a package which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length-1].BlobSize}");
+            }
+			BinaryBlob blob = bufferPool[poolIdx].GetBlob();
 			
 			eventPool.ConfigureSocketToRead(blob, evt, size);
 			if (client != null && !client.ReceiveAsync(evt))
@@ -441,9 +456,27 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 		}
 
-		public BinaryBlob CreateMessage(bool raw = false)
+		public BinaryBlob CreateMessageWithSize(int size = 0, bool raw = false)
+        {
+			int poolIdx = -1;
+			for (int i = 0; i < bufferPool.Length; i++)
+			{
+				if (size < bufferPool[i].BlobSize)
+				{
+					poolIdx = i;
+					break;
+				}
+			}
+			if (poolIdx == -1)
+			{
+				throw new InvalidOperationException($"Try to create message which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length - 1].BlobSize}");
+			}
+			return CreateMessage(poolIdx, raw);
+		}
+
+		public BinaryBlob CreateMessage(int poolIndex = 0, bool raw = false)
 		{
-			BinaryBlob blob = bufferPool.GetBlob();
+			BinaryBlob blob = bufferPool[poolIndex].GetBlob();
 			if (!raw)
 			{
 				blob.PrefixBuffer(headerSize);
