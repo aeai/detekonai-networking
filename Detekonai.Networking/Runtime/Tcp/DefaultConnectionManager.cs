@@ -1,13 +1,7 @@
 ﻿using Detekonai.Core.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
@@ -26,14 +20,14 @@ namespace Detekonai.Networking.Runtime.Tcp
             this.factory = factory;
         }
 
-        public void OnAccept(SocketAsyncEventArgs evt)
+        public void OnAccept(Socket evt)
         {
             int id = Interlocked.Increment(ref counter);
             TcpChannel ch = factory.Create();
             ch.Name = $"Channel-{id}";
-            ch.AssignSocket(evt.AcceptSocket);
+            ch.AssignSocket(evt);
             OnClientAccepted?.Invoke(ch);
-            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.AcceptSocket.RemoteEndPoint).Address}:{((IPEndPoint)evt.AcceptSocket.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
         }
 
     }

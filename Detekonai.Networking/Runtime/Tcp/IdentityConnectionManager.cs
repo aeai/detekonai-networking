@@ -61,13 +61,13 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
         }
 
-        public void OnAccept(SocketAsyncEventArgs evt)
+        public void OnAccept(Socket evt)
         {
             SocketAsyncEventArgs queryEvt = eventPool.Take(null, strategy, null, HandleEvent);
             eventPool.ConfigureSocketToRead(blobPool.GetBlob(), queryEvt, IdTokenSize);
-            (queryEvt.UserToken as CommToken).ownerSocket = evt.AcceptSocket;
+            (queryEvt.UserToken as CommToken).ownerSocket = evt;
 
-            if (!evt.AcceptSocket.ReceiveAsync(queryEvt))
+            if (!evt.ReceiveAsync(queryEvt))
             {
                 strategy.EnqueueEvent(queryEvt);
             }
