@@ -112,7 +112,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 		{
 		}
 
-
 		public void AssignSocket(Socket socket)
 		{
 			if (client != null)
@@ -194,7 +193,14 @@ namespace Detekonai.Networking.Runtime.Tcp
 				if(e.SocketError == SocketError.Success)
 				{
 					Logger?.Log(this, "Channel open", LogLevel.Info);
-					ReceiveData(headerSize, null);
+					if (Mode == ICommChannel.EChannelMode.Managed)
+					{
+						ReceiveData(headerSize, null);
+					}
+					else
+                    {
+						ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
+					}
 					Status = ICommChannel.EChannelStatus.Open;
 				}
 				else
