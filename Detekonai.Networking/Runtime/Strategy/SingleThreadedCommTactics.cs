@@ -1,5 +1,6 @@
 ﻿using Detekonai.Core;
 using Detekonai.Networking.Runtime.AsyncEvent;
+using Detekonai.Networking.Runtime.Raw;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -22,8 +23,8 @@ namespace Detekonai.Networking.Runtime.Strategy
 
         public ICommChannel Owner { get; private set; }
         public ICommTactics.RequestReceivedHandler RequestHandler { get; set ; }
-        public ICommTactics.RawDataReceiveHandler RawDataReceiver { get; set ; }
- 
+        public IRawCommInterpreter RawDataInterpreter { get; set; }
+
         private enum EStatus 
         {
             Active,

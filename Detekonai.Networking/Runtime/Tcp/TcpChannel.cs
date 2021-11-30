@@ -1,6 +1,7 @@
 ﻿using Detekonai.Core;
 using Detekonai.Core.Common;
 using Detekonai.Networking.Runtime.AsyncEvent;
+using Detekonai.Networking.Runtime.Raw;
 using Detekonai.Networking.Runtime.Strategy;
 using System;
 using System.Net;
@@ -336,7 +337,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				}
 				else
 				{
-					bytesNeeded = Tactics.RawDataReceiver.Invoke(channel, blob, e.BytesTransferred);
+					bytesNeeded = Tactics.RawDataInterpreter != null ? Tactics.RawDataInterpreter.OnDataArrived(channel, blob, e.BytesTransferred) : 0;
 					if (bytesNeeded == 0)
 					{
 						bytesNeeded = bufferPool[RawPoolIndex].BlobSize;
@@ -374,9 +375,13 @@ namespace Detekonai.Networking.Runtime.Tcp
 		{
 			Send(blob, CommToken.HeaderFlags.None);
         }
+		void Send(BinaryBlob blob, IRawCommInterpreter interpreter)
+		{
+			Send(blob, CommToken.HeaderFlags.None, interpreter);
+		}
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
-		private IUniversalAwaiter<ICommResponse> Send(BinaryBlob blob, CommToken.HeaderFlags flags)
+		private IUniversalAwaiter<ICommResponse> Send(BinaryBlob blob, CommToken.HeaderFlags flags, IRawCommInterpreter interpreter = null)
 		{
 			ushort sentIndex = 0;
 			IUniversalAwaiter<ICommResponse> returnVal = null;
@@ -435,7 +440,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			int poolIdx = -1;
 			for(int i = 0; i < bufferPool.Length; i++)
             {
-				if(size < bufferPool[i].BlobSize)
+				if(size <= bufferPool[i].BlobSize)
                 {
 					poolIdx = i;
 					break;

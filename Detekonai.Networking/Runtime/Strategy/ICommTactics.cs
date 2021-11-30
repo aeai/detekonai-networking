@@ -1,5 +1,6 @@
 ﻿using Detekonai.Core;
 using Detekonai.Networking.Runtime.AsyncEvent;
+using Detekonai.Networking.Runtime.Raw;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +14,6 @@ namespace Detekonai.Networking.Runtime.Strategy
 		public delegate void BlobReceivedHandler(ICommChannel channel, BinaryBlob e);
 		public delegate void TacticsCompleted(ICommTactics tactics);
 		public delegate void CommChannelChangeHandler(ICommChannel channel);
-		public delegate int RawDataReceiveHandler(ICommChannel channel, BinaryBlob e, int bytesTransferred);
 		public delegate void RequestReceivedHandler(ICommChannel channel, BinaryBlob request, IRequestTicket ticket);
 
 		public ICommChannel Owner { get; }
@@ -25,7 +25,7 @@ namespace Detekonai.Networking.Runtime.Strategy
 
 
 		RequestReceivedHandler RequestHandler { get; set; }
-		RawDataReceiveHandler RawDataReceiver { get; set; }
+		IRawCommInterpreter RawDataInterpreter { get; set; }
 		CommTacticsFinalizerHelper TacticsFinalizer { get;}
 		event BlobReceivedHandler OnBlobReceived;
 		event CommChannelChangeHandler OnRequestSent;
