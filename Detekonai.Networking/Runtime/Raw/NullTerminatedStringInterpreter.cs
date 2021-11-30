@@ -34,11 +34,17 @@ namespace Detekonai.Networking.Runtime.Raw
             }
         }
 
+        public UniversalAwaitable<string> AwaitData()
+        {
+            IUniversalAwaiter<string> awaiter = awaiterFactory.Create();
+            return new UniversalAwaitable<string>(awaiter);
+        }
+
         public UniversalAwaitable<string> SendRpc(ICommChannel channel, BinaryBlob blob)
         {
             IUniversalAwaiter<string> awaiter = awaiterFactory.Create();
             channel.Send(blob);
-            return new UniversalAwaitable<string>(awaiter); ;
+            return new UniversalAwaitable<string>(awaiter);
         }
 
     }
