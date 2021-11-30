@@ -11,5 +11,6 @@ namespace Detekonai.Networking.Runtime.Raw
     public interface IRawCommInterpreterAsync<T> : IRawCommInterpreter
     {
         UniversalAwaitable<T> SendRpc(ICommChannel channel, BinaryBlob blob);
+        UniversalAwaitable<T> AwaitData();
     }
 }
