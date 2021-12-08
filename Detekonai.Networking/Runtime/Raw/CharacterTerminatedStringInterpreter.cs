@@ -8,16 +8,19 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
-    public class NullTerminatedStringInterpreter : IRawCommInterpreterAsync<string>
+    public class CharacterTerminatedStringInterpreter : IRawCommInterpreterAsync<string>
     {
-        private SingletonAwaiterFactory<string> awaiterFactory = new SingletonAwaiterFactory<string>();
+        private readonly SingletonAwaiterFactory<string> awaiterFactory = new SingletonAwaiterFactory<string>();
 
         private int dataCounter = 0;
+
+        public char Terminator { get; }
+
         public int OnDataArrived(ICommChannel channel, BinaryBlob blob, int bytesTransfered)
         {
             dataCounter += bytesTransfered;
             blob.Index = dataCounter - 1;
-            if(blob.ReadByte() == 0)
+            if(blob.ReadByte() == Terminator)
             {
                 blob.JumpIndexToBegin();
                 awaiterFactory.SetResponse(blob.ReadFixedString(dataCounter));
@@ -32,6 +35,11 @@ namespace Detekonai.Networking.Runtime.Raw
             {
                 return blob.BufferSize - blob.Index;
             }
+        }
+
+        public CharacterTerminatedStringInterpreter(char terminator)
+        {
+            Terminator = terminator;
         }
 
         public UniversalAwaitable<string> AwaitData()
