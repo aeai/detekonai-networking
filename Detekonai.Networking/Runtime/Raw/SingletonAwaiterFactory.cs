@@ -46,11 +46,12 @@ namespace Detekonai.Networking.Runtime.Raw
 
         public IUniversalAwaiter<T> Create()
         {
-            if(continuation != null)
+            if (continuation != null)
             {
                 Cancel();
             }
-        
+            result = default;
+            status = AwaitResponseStatus.Pending;
             return new SingletonAwaiter<T>(this);
         }
 
@@ -59,24 +60,22 @@ namespace Detekonai.Networking.Runtime.Raw
             if (status == AwaitResponseStatus.Pending)
             {
                 status = AwaitResponseStatus.Canceled;
-                continuation?.Invoke();
-                Reset();
+                Action cont = continuation;
+                continuation = null;
+                cont?.Invoke();
             }
         }
 
         public void SetResponse(T value)
         {
-            result = value;
-            status = AwaitResponseStatus.Finished;
-            continuation?.Invoke();
-            Reset();
-        }
-
-        private void Reset()
-        {
-            continuation = null;
-            result = default;
-            status = AwaitResponseStatus.Pending;
+            if (status == AwaitResponseStatus.Pending)
+            {
+                result = value;
+                status = AwaitResponseStatus.Finished;
+                Action cont = continuation;
+                continuation = null;
+                cont?.Invoke();
+            }
         }
     }
 }
