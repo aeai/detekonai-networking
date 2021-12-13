@@ -79,7 +79,23 @@ namespace Detekonai.Networking.Runtime.Tcp
 		}
 		public bool Reliable => true;
 		public string Name { get; set; }
-		public ICommChannel.EChannelMode Mode { get; set; } = ICommChannel.EChannelMode.Managed;
+
+		private bool modeTransition = false;
+		private ICommChannel.EChannelMode mode = ICommChannel.EChannelMode.Managed;
+		public ICommChannel.EChannelMode Mode {
+			get
+			{
+				return mode;
+			}
+			set 
+			{
+				if(mode == EChannelMode.Raw && value == EChannelMode.Managed)
+                {
+					modeTransition = true;
+				}
+				mode = value;
+			}
+		}
 		public ICommChannel.EChannelStatus Status
 		{
 			get
@@ -214,9 +230,19 @@ namespace Detekonai.Networking.Runtime.Tcp
 			{
 				if (Mode == ICommChannel.EChannelMode.Managed)
 				{
-					if (HandleManagedReceive(channel, blob, e)) 
+					if (modeTransition)
 					{
-						return;
+						if (HandleSlowReceive(channel, blob, e))
+						{
+							return;
+						}
+					}
+					else
+					{
+						if (HandleManagedReceive(channel, blob, e))
+						{
+							return;
+						}
 					}
 				}
 				else
@@ -241,6 +267,105 @@ namespace Detekonai.Networking.Runtime.Tcp
 				}
 			}
 			eventPool.Release(e);
+		}
+
+		private bool HandleSlowReceive(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
+        {
+			modeTransition = false;
+			if (e.SocketError == SocketError.Success)
+			{
+				if (e.BytesTransferred == 0)
+				{
+					CloseChannel();
+					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
+				}
+				else
+				{
+					int availableBytes = e.BytesTransferred;
+					if (availableBytes < headerSize) //we have less data that needed for a header, go back to fast track
+					{
+						ContinueReceivingData(blob, e);
+						return true;
+					}
+					else 
+					// slow track we may have more than 1 message or partial headers etc.
+					{
+						while (availableBytes > 0)
+						{
+							if (availableBytes < headerSize) //we have a partial header, create new blob release old one
+							{
+								BinaryBlob msgBlob = GetBlobFromPool(headerSize);
+								msgBlob.CopyDataFrom(blob, availableBytes);
+								blob.Release();
+								ContinueReceivingData(msgBlob, e);
+								return true;
+							}
+							else if (availableBytes >= headerSize) //we have header and extra data
+							{
+								availableBytes -= headerSize;
+								CommToken token = (CommToken)e.UserToken;
+								uint flagsAndSize = blob.ReadUInt();
+								token.headerFlags = ((CommToken.HeaderFlags)((flagsAndSize & 0xFF000000) >> 24));
+								int bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
+								token.msgSize = bytesNeeded;
+								token.index = blob.ReadUShort();
+
+
+								if (bytesNeeded > blob.BufferSize - headerSize) // we had some data but not enough place to hold the rest of the data
+								{
+									ReceiveData(bytesNeeded, token, blob, availableBytes);
+									return false;
+								}
+								else if (bytesNeeded < availableBytes)
+								{
+									BinaryBlob msgBlob = GetBlobFromPool(headerSize + bytesNeeded);
+									AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
+									msgBlob.CopyDataFrom(blob, bytesNeeded);
+									availableBytes -= bytesNeeded;
+									blob.Index += bytesNeeded;
+
+									if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
+									{
+										int msgStart = msgBlob.Index;
+										msgBlob.Index = headerSize + token.msgSize - 2;
+										ushort ackIndex = msgBlob.ReadUShort();
+										msgBlob.Index = msgStart;
+										Tactics.EnqueueResponse(ackIndex, msgBlob);
+										msgBlob = null;//make sure we don't relase now we need it for TAP
+									}
+									else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
+									{
+										Tactics.RequestHandler?.Invoke(this, msgBlob, new TcpChannelRequestTicket(this, token.index));
+									}
+									else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
+									{
+										HandleProtocolBlob(msgBlob);
+									}
+									else
+									{
+										//beware: if we go async we may release the blob before the async function finishes
+										Tactics.BlobRecieved(msgBlob);
+									}
+									msgBlob?.Release();
+								}
+							}
+						}
+						readingMode = EReadingMode.Header;
+						bytesNeeded = headerSize;
+						ReceiveData(headerSize, null);
+					}
+				}
+			}
+			else
+			{
+				//avoid double close and bogous log messages if we closed the connection manually
+				if (status != ICommChannel.EChannelStatus.Closed)
+				{
+					CloseChannel();
+					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
+				}
+			}
+			return false;
 		}
 
 		private bool HandleManagedReceive(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
@@ -342,6 +467,11 @@ namespace Detekonai.Networking.Runtime.Tcp
 					{
 						bytesNeeded = bufferPool[RawPoolIndex].BlobSize;
 						ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
+						if(Tactics.RawDataInterpreter is IContinuable ac)
+                        {
+							ac.Continue();
+                        }
+						
 					}
 					else
 					{
@@ -432,26 +562,33 @@ namespace Detekonai.Networking.Runtime.Tcp
 			blob.AddByte((byte)SystemMessage.Ping);
 			Send(blob, CommToken.HeaderFlags.SystemPackage);
 		}
+		
 
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
-		private void ReceiveData(int size, CommToken token)
-		{
-            var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
+		private BinaryBlob GetBlobFromPool(int size)
+        {
 			int poolIdx = -1;
-			for(int i = 0; i < bufferPool.Length; i++)
-            {
-				if(size <= bufferPool[i].BlobSize)
-                {
+			for (int i = 0; i < bufferPool.Length; i++)
+			{
+				if (size <= bufferPool[i].BlobSize)
+				{
 					poolIdx = i;
 					break;
-                }
-            }
-			if(poolIdx == -1)
-            {
-				throw new InvalidOperationException($"Try to read a package which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length-1].BlobSize}");
-            }
-			BinaryBlob blob = bufferPool[poolIdx].GetBlob();
-			
+				}
+			}
+			if (poolIdx == -1)
+			{
+				throw new InvalidOperationException($"Try to read a package which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length - 1].BlobSize}");
+			}
+			return bufferPool[poolIdx].GetBlob();
+		}
+
+		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
+		private void ReceiveData(int size, CommToken token, BinaryBlob originalBlob = null, int partialDataSize = 0)
+		{
+            var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
+
+			BinaryBlob blob = GetBlobFromPool(size);
+
 			if(token != null)
             {
 				if(evt.UserToken is CommToken ct)
@@ -461,6 +598,10 @@ namespace Detekonai.Networking.Runtime.Tcp
 					ct.headerFlags = token.headerFlags;
 					//add back the header to make it the same format as a single-read message
 					AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
+					if(originalBlob != null)
+                    {
+						blob.CopyDataFrom(originalBlob, partialDataSize);
+                    }
                 }
             }
 			eventPool.ConfigureSocketToRead(blob, evt, size);

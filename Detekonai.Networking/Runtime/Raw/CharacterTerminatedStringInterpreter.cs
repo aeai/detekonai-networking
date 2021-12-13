@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
-    public class CharacterTerminatedStringInterpreter : IRawCommInterpreterAsync<string>
+    public class CharacterTerminatedStringInterpreter : IRawCommInterpreterAsync<string>, IContinuable
     {
-        private readonly SingletonAwaiterFactory<string> awaiterFactory = new SingletonAwaiterFactory<string>();
+        private readonly LinearAwaiterFactory<string> awaiterFactory = new LinearAwaiterFactory<string>();
 
         private int dataCounter = 0;
 
@@ -55,5 +55,9 @@ namespace Detekonai.Networking.Runtime.Raw
             return new UniversalAwaitable<string>(awaiter);
         }
 
+        public void Continue()
+        {
+            awaiterFactory.Continue();
+        }
     }
 }

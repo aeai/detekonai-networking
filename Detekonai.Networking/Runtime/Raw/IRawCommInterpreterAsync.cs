@@ -8,6 +8,11 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
+    public interface IContinuable
+    {
+        void Continue();
+    }
+
     public interface IRawCommInterpreterAsync<T> : IRawCommInterpreter
     {
         UniversalAwaitable<T> SendRpc(ICommChannel channel, BinaryBlob blob);

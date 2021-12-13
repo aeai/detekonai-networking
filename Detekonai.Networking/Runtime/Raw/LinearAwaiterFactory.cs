@@ -1,5 +1,6 @@
 ﻿using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,17 +8,19 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
-    public class SingletonAwaiterFactory<T>
+    public class LinearAwaiterFactory<T>
     {
 
-        private class SingletonAwaiter<M> : IUniversalAwaiter<M>
+        private class LinearAwaiter<M> : IUniversalAwaiter<M>
         {
-            private readonly SingletonAwaiterFactory<M> owner;
+            private readonly LinearAwaiterFactory<M> owner;
 
             public bool IsCompleted { get; set; }
 
             public bool IsInitialized { get; set; }
 
+            private M result;
+            private bool resultCached = false;
             public void Cancel()
             {
                 owner.Cancel();
@@ -25,7 +28,12 @@ namespace Detekonai.Networking.Runtime.Raw
 
             public M GetResult()
             {
-                return owner.result;
+                if(!resultCached)//we cache so we can call GetResult multiple times if needs be
+                {
+                    resultCached = true;
+                    owner.results.TryDequeue(out result);
+                }
+                return result;
             }
 
             public void OnCompleted(Action continuation)
@@ -34,25 +42,23 @@ namespace Detekonai.Networking.Runtime.Raw
                 IsInitialized = true;
             }
 
-            public SingletonAwaiter(SingletonAwaiterFactory<M> owner)
+            public LinearAwaiter(LinearAwaiterFactory<M> owner)
             {
                 this.owner = owner;
             }
         }
 
         private Action continuation = null;
-        private T result = default;
         private AwaitResponseStatus status = AwaitResponseStatus.Pending;
-
+        private readonly ConcurrentQueue<T> results = new ConcurrentQueue<T>();
         public IUniversalAwaiter<T> Create()
         {
             if (continuation != null)
             {
                 Cancel();
             }
-            result = default;
             status = AwaitResponseStatus.Pending;
-            return new SingletonAwaiter<T>(this);
+            return new LinearAwaiter<T>(this);
         }
 
         public void Cancel()
@@ -70,7 +76,14 @@ namespace Detekonai.Networking.Runtime.Raw
         {
             if (status == AwaitResponseStatus.Pending)
             {
-                result = value;
+                results.Enqueue(value);
+            }
+        }
+
+        public void Continue() 
+        {
+            if (status == AwaitResponseStatus.Pending)
+            {
                 status = AwaitResponseStatus.Finished;
                 Action cont = continuation;
                 continuation = null;
