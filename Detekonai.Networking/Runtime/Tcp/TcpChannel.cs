@@ -316,7 +316,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 									ReceiveData(bytesNeeded, token, blob, availableBytes);
 									return false;
 								}
-								else if (bytesNeeded < availableBytes)
+								else if (bytesNeeded <= availableBytes)
 								{
 									BinaryBlob msgBlob = GetBlobFromPool(headerSize + bytesNeeded);
 									AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
