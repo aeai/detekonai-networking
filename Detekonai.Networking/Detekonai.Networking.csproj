@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.0.18</Version>
+    <Version>0.0.19</Version>
     <Company>Detekonai</Company>
     <Authors>Aeai</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -13,11 +13,10 @@
     <PackageProjectUrl>https://github.com/aeai/detekonai-networking</PackageProjectUrl>
     <Configurations>Debug;Release;MasterDebug</Configurations>
   </PropertyGroup>
-
-   <ItemGroup Condition=" '$(Configuration)' != 'MasterDebug' ">
-    <PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.3" />
-  </ItemGroup>
   <ItemGroup Condition=" '$(Configuration)' == 'MasterDebug' ">
     <ProjectReference Include="..\..\detekonai-binaryblob\Detekonai.Core.BinaryBlob\Detekonai.Core.BinaryBlob.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.4" />
   </ItemGroup>
 </Project>

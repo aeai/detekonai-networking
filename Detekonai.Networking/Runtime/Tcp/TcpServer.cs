@@ -86,7 +86,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			{
 				if (e.SocketError == SocketError.Success)
 				{
-					ConnectionManager.OnAccept(e.AcceptSocket);
+					ConnectionManager.OnAccept(new SimpleConnectionData(e.AcceptSocket));
 				}
 				else
                 {

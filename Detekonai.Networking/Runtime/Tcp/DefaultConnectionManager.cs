@@ -7,7 +7,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 {
     public class DefaultConnectionManager : ITcpConnectionManager
     {
-        private readonly ICommChannelFactory<TcpChannel> factory;
+        private readonly ICommChannelFactory<TcpChannel, IConnectionData> factory;
 
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
 
@@ -15,19 +15,18 @@ namespace Detekonai.Networking.Runtime.Tcp
 
         public ILogConnector Logger { get; set; } = null;
 
-        public DefaultConnectionManager(ICommChannelFactory<TcpChannel> factory)
+        public DefaultConnectionManager(ICommChannelFactory<TcpChannel, IConnectionData> factory)
         {
             this.factory = factory;
         }
 
-        public void OnAccept(Socket evt)
+        public void OnAccept(IConnectionData evt)
         {
             int id = Interlocked.Increment(ref counter);
-            TcpChannel ch = factory.Create();
+            TcpChannel ch = factory.CreateFrom(evt);
             ch.Name = $"Channel-{id}";
-            ch.AssignSocket(evt);
             OnClientAccepted?.Invoke(ch);
-            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.RemoteEndPoint).Address}:{((IPEndPoint)evt.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.Sock.RemoteEndPoint).Address}:{((IPEndPoint)evt.Sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
         }
 
     }

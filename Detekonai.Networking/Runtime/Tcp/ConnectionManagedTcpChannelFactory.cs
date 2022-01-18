@@ -1,22 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Detekonai.Core;
+﻿using Detekonai.Core;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Strategy;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
-    public class SimpleTcpChannelFactory : ICommChannelFactory<TcpChannel, Socket>
+    public class ConnectionManagedTcpChannelFactory : ICommChannelFactory<TcpChannel, IConnectionData>
     {
         private readonly SocketAsyncEventArgsPool evtPool;
         private readonly IAsyncEventCommStrategy strategy;
         private readonly BinaryBlobPool blobPool;
-        public SimpleTcpChannelFactory(SocketAsyncEventArgsPool evtPool, IAsyncEventCommStrategy strategy, BinaryBlobPool blobPool)
+        public ConnectionManagedTcpChannelFactory(SocketAsyncEventArgsPool evtPool, IAsyncEventCommStrategy strategy, BinaryBlobPool blobPool)
         {
             this.evtPool = evtPool;
             this.strategy = strategy;
@@ -28,10 +21,10 @@ namespace Detekonai.Networking.Runtime.Tcp
             return channel;
         }
 
-        public TcpChannel CreateFrom(Socket data)
+        public TcpChannel CreateFrom(IConnectionData data)
         {
             TcpChannel channel = new TcpChannel(strategy, evtPool, blobPool);
-            channel.AssignSocket(data);
+            channel.AssignSocket(data.Sock);
             return channel;
         }
     }

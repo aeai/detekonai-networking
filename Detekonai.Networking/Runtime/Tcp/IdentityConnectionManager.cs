@@ -18,15 +18,16 @@ namespace Detekonai.Networking.Runtime.Tcp
     {
         private readonly SocketAsyncEventArgsPool eventPool;
         private readonly IAsyncEventCommStrategy strategy;
-        private readonly ICommChannelFactory<TcpChannel> factory;
+        private readonly ICommChannelFactory<TcpChannel, IConnectionData> factory;
         private readonly BinaryBlobPool blobPool;
         private readonly ConcurrentDictionary<string, TcpChannel> channels = new ConcurrentDictionary<string, TcpChannel>();
         private readonly ConcurrentDictionary<string, CancellationTokenSource> ChannelsOnHold = new ConcurrentDictionary<string, CancellationTokenSource>();
+        private readonly ConcurrentDictionary<Socket, object> externalData = new ConcurrentDictionary<Socket, object>();
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
         public ILogConnector Logger { get; set; } = null;
         public int ReconnectTimeoutMillis { get; set; } = -1;
         public int IdTokenSize { get; set; } = 8;
-        public IdentityConnectionManager(SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel> factory, BinaryBlobPool blobPool)
+        public IdentityConnectionManager(SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel, IConnectionData> factory, BinaryBlobPool blobPool)
         {
             eventPool = evPool;
             strategy = eventHandlingStrategy;
@@ -61,33 +62,33 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
         }
 
-        public void OnAccept(Socket evt)
+        public void OnAccept(IConnectionData evt)
         {
             SocketAsyncEventArgs queryEvt = eventPool.Take(null, strategy, null, HandleEvent);
             eventPool.ConfigureSocketToRead(blobPool.GetBlob(), queryEvt, IdTokenSize);
             (queryEvt.UserToken as CommToken).ownerSocket = evt;
-
-            if (!evt.ReceiveAsync(queryEvt))
+            if (!evt.Sock.ReceiveAsync(queryEvt))
             {
                 strategy.EnqueueEvent(queryEvt);
             }
         }
+
+        
 
         private void AssignChannel(SocketAsyncEventArgs e, string id)
         {
             TcpChannel ch = null;
             if (channels.TryGetValue($"Ch-{id}", out ch))
             {
-                Socket sock = (e.UserToken as CommToken).ownerSocket;
+                Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
                 ch.AssignSocket(sock);
                 Logger?.Log(this, $"TCP Ch-{id} returned from {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
             }
             else
             {
-                ch = factory.Create();
+                ch = factory.CreateFrom((e.UserToken as CommToken).ownerSocket);
                 ch.Name = $"Ch-{id}";
-                Socket sock = (e.UserToken as CommToken).ownerSocket;
-                ch.AssignSocket(sock);
+                Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
                 channels.TryAdd(ch.Name, ch);
                 Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
                 OnClientAccepted?.Invoke(ch);
@@ -137,7 +138,7 @@ namespace Detekonai.Networking.Runtime.Tcp
                 {
                     if (e.UserToken is CommToken token)
                     {
-                        token.ownerSocket.Dispose();
+                        token.ownerSocket.Sock.Dispose();
                     }
                     Logger?.Log(this, $"Error accepting socket identity: {e.SocketError}", ILogConnector.LogLevel.Error);
                     

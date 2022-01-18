@@ -1,5 +1,6 @@
 ﻿using Detekonai.Core;
 using Detekonai.Networking.Runtime.Strategy;
+using Detekonai.Networking.Runtime.Tcp;
 using System;
 using System.Net.Sockets;
 
@@ -18,7 +19,7 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 		}
 
 		public ICommChannel ownerChannel;
-		public Socket ownerSocket;
+		public IConnectionData ownerSocket;
 		public HeaderFlags headerFlags;
 		public ushort index;
 		public int msgSize;

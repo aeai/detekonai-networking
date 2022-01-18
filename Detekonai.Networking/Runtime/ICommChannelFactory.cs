@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime
 {
-    public interface ICommChannelFactory<T> where T: ICommChannel
+    public interface ICommChannelFactory<T,TData> where T: ICommChannel
     {
         T Create();
+        T CreateFrom(TData data);
     }
 }
