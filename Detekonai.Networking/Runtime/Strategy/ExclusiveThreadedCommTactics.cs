@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Strategy
 {
-    class ExclusiveThreadedCommTactics : ICommTactics
+    public class ExclusiveThreadedCommTactics : ICommTactics
     {
 
         private SingleThreadedChannelOpenAwaiterFactory openAwaiterFactory = null;
@@ -42,6 +42,11 @@ namespace Detekonai.Networking.Runtime.Strategy
                 ctx.Close();
                 OnTacticsCompleted?.Invoke(this);
             } );
+        }
+
+        public void Post(SendOrPostCallback callback, object ob)
+        {
+            ctx.Post(callback, ob);
         }
 
         private void OpenAwaiterFactory_OnFinished()

@@ -231,6 +231,8 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 			else if (e.LastOperation == SocketAsyncOperation.Receive)
 			{
+				//TODO this but better, and make it work maybe use bytesWritten?
+				blob.Index += e.BytesTransferred;
 				if (Mode == ICommChannel.EChannelMode.Managed)
 				{
 					if (modeTransition)
@@ -313,28 +315,30 @@ namespace Detekonai.Networking.Runtime.Tcp
 								bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
 								token.msgSize = bytesNeeded;
 								token.index = blob.ReadUShort();
+								
 								readingMode = EReadingMode.Data;
 
 
 								if (bytesNeeded > blob.BufferSize - headerSize) // we had some data but not enough place to hold the rest of the data
 								{
-									ReceiveData(bytesNeeded, token, blob, availableBytes);
+									ReceiveData(bytesNeeded, blob, availableBytes);
 									return false;
 								}
 								else if (bytesNeeded <= availableBytes) // we have enough data for a complete message
 								{
 									BinaryBlob msgBlob = GetBlobFromPool(headerSize + bytesNeeded);
-									AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
+									//AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
 									msgBlob.CopyDataFrom(blob, bytesNeeded);
 									availableBytes -= bytesNeeded;
-									blob.Index += bytesNeeded;
 
+									msgBlob.JumpIndexToBegin();
 									if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
 									{
-										int msgStart = msgBlob.Index;
-										msgBlob.Index = headerSize + token.msgSize - 2;
+										//int msgStart = msgBlob.Index;
+										msgBlob.Index = token.msgSize - 2;
 										ushort ackIndex = msgBlob.ReadUShort();
-										msgBlob.Index = msgStart;
+										//msgBlob.Index = msgStart;
+										msgBlob.JumpIndexToBegin();
 										Tactics.EnqueueResponse(ackIndex, msgBlob);
 										msgBlob = null;//make sure we don't relase now we need it for TAP
 									}
@@ -356,7 +360,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 								else if (bytesNeeded >= availableBytes)//we continue requesting data in the normal handler
 								{
 									BinaryBlob msgBlob = GetBlobFromPool(bytesNeeded);
-									AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
+									//AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
 									msgBlob.CopyDataFrom(blob, availableBytes);
 									blob.Release();
 									readingMode = EReadingMode.Data;
@@ -406,9 +410,10 @@ namespace Detekonai.Networking.Runtime.Tcp
 							bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
 							token.msgSize = bytesNeeded;
 							token.index = blob.ReadUShort();
-							if (bytesNeeded > blob.BufferSize - headerSize)
+							blob.JumpIndexToBegin();
+							if (bytesNeeded > blob.BufferSize)
 							{
-								ReceiveData(bytesNeeded, token);
+								ReceiveData(bytesNeeded/*, token*/);
 							}
 							else
 							{
@@ -418,12 +423,14 @@ namespace Detekonai.Networking.Runtime.Tcp
 						}
 						else
 						{
+							blob.JumpIndexToBegin();
 							if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
 							{
-								int msgStart = blob.Index;
-								blob.Index = headerSize + token.msgSize - 2;
+								//int msgStart = blob.Index;
+								blob.Index = token.msgSize - 2;
 								ushort ackIndex = blob.ReadUShort();
-								blob.Index = msgStart;
+								blob.JumpIndexToBegin();
+								//blob.Index = msgStart;
 								token.blob = null;//don't release the blob we need to keep it around for TAP, we release later
 								Tactics.EnqueueResponse(ackIndex, blob);
 							}
@@ -598,25 +605,25 @@ namespace Detekonai.Networking.Runtime.Tcp
 		}
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
-		private void ReceiveData(int size, CommToken token, BinaryBlob originalBlob = null, int partialDataSize = 0)
+		private void ReceiveData(int size,/* CommToken token, */BinaryBlob originalBlob = null, int partialDataSize = 0)
 		{
 			var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 
 			BinaryBlob blob = GetBlobFromPool(size);
 
-			if (token != null)
+			//if (token != null)
 			{
-				if (evt.UserToken is CommToken ct)
+				//if (evt.UserToken is CommToken ct)
+				//{
+				//	ct.index = token.index;
+				//	ct.msgSize = token.msgSize;
+				//	ct.headerFlags = token.headerFlags;
+				//	//add back the header to make it the same format as a single-read message
+				//	AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
+				//}
+				if (originalBlob != null)
 				{
-					ct.index = token.index;
-					ct.msgSize = token.msgSize;
-					ct.headerFlags = token.headerFlags;
-					//add back the header to make it the same format as a single-read message
-					AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
-					if (originalBlob != null)
-					{
-						blob.CopyDataFrom(originalBlob, partialDataSize);
-					}
+					blob.CopyDataFrom(originalBlob, partialDataSize);
 				}
 			}
 			eventPool.ConfigureSocketToRead(blob, evt, size);
