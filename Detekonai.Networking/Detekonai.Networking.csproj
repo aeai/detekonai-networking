@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.0.20</Version>
+    <Version>0.0.21</Version>
     <Company>Detekonai</Company>
     <Authors>Aeai</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

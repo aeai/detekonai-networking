@@ -145,5 +145,6 @@ namespace Detekonai.Networking.Runtime.Strategy
             }
             OnConnectionStatusChanged?.Invoke(Owner);
         }
+
     }
 }

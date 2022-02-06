@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
@@ -16,10 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Detekonai.Networking\Detekonai.Networking.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Runtime\Tcp\" />
   </ItemGroup>
 
 </Project>

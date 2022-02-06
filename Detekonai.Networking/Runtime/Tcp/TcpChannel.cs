@@ -9,10 +9,11 @@ using System.Net.Sockets;
 using System.Threading;
 using static Detekonai.Core.Common.ILogConnector;
 using static Detekonai.Networking.ICommChannel;
+using static Detekonai.Networking.Runtime.Tcp.TcpPacketBuilder;
 
 namespace Detekonai.Networking.Runtime.Tcp
 {
-	public sealed class TcpChannel : ICommChannel
+	public sealed class TcpChannel : ICommChannel, ITcpPacketHandler
 	{
 
 		private enum SystemMessage
@@ -53,9 +54,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 		private Socket client;
 		private SocketAsyncEventArgsPool eventPool;
 		private BinaryBlobPool[] bufferPool;
-		private int bytesNeeded = headerSize;
 		private ushort msgIndex = 1;
-		private EReadingMode readingMode = EReadingMode.Header;
 		public ILogConnector Logger { get; set; }
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
@@ -82,23 +81,19 @@ namespace Detekonai.Networking.Runtime.Tcp
 		public bool Reliable => true;
 		public string Name { get; set; }
 
-		private bool modeTransition = false;
-		private ICommChannel.EChannelMode mode = ICommChannel.EChannelMode.Managed;
+		private TcpPacketBuilder builder;
 		public ICommChannel.EChannelMode Mode
 		{
 			get
 			{
-				return mode;
+				return builder.Mode;
 			}
 			set
 			{
-				if (mode == EChannelMode.Raw && value == EChannelMode.Managed)
-				{
-					modeTransition = true;
-				}
-				mode = value;
+				builder.Mode = value;
 			}
 		}
+
 		public ICommChannel.EChannelStatus Status
 		{
 			get
@@ -115,13 +110,16 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 		}
 
-		public TcpChannel(IPEndPoint endpoint, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool)
+		public int RawPoolSize => bufferPool[RawPoolIndex].BlobSize;
+
+        public TcpChannel(IPEndPoint endpoint, IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool)
 		{
 			this.Endpoint = endpoint;
 			this.eventPool = eventPool;
 			this.bufferPool = bufferPool;
 			this.eventHandlingStrategy = eventHandlingStrategy;
 			Tactics = eventHandlingStrategy.RegisterChannel(this);
+			builder = new TcpPacketBuilder(this);
 		}
 
 		public TcpChannel(IAsyncEventCommStrategy eventHandlingStrategy, SocketAsyncEventArgsPool eventPool, params BinaryBlobPool[] bufferPool) : this(null, eventHandlingStrategy, eventPool, bufferPool)
@@ -206,313 +204,104 @@ namespace Detekonai.Networking.Runtime.Tcp
 			return new UniversalAwaitable<ICommResponse>(awaiter);
 		}
 
-		public void HandleEvent(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
+		public void CommReceived(CommToken token)
 		{
-			if (e.LastOperation == SocketAsyncOperation.Connect)
+			BinaryBlob blob = token.blob;
+
+			if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
 			{
-				if (e.SocketError == SocketError.Success)
+				blob.Index = token.msgSize - 2;
+				ushort ackIndex = blob.ReadUShort();
+				blob.JumpIndexToBegin();
+				token.blob = null;//don't release the blob we need to keep it around for TAP, we release later
+				Tactics.EnqueueResponse(ackIndex, blob);
+			}
+			else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
+			{
+				Tactics.RequestHandler?.Invoke(this, blob, new TcpChannelRequestTicket(this, token.index));
+			}
+			else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
+			{
+				HandleProtocolBlob(blob);
+			}
+			else
+			{
+				//beware: if we go async we may release the blob before the async function finishes
+				Tactics.BlobRecieved(blob);
+			}
+		}
+		private bool HandleConnectEvent(SocketAsyncEventArgs e)
+        {
+			if (e.SocketError == SocketError.Success)
+			{
+				Logger?.Log(this, "Channel open", LogLevel.Info);
+				if (Mode == ICommChannel.EChannelMode.Managed)
 				{
-					Logger?.Log(this, "Channel open", LogLevel.Info);
-					if (Mode == ICommChannel.EChannelMode.Managed)
-					{
-						ReceiveData(headerSize, null);
-					}
-					else
-					{
-						ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
-					}
-					Status = ICommChannel.EChannelStatus.Open;
+					ReceiveData(headerSize, null);
 				}
 				else
 				{
-					Status = ICommChannel.EChannelStatus.Closed;
-					Logger?.Log(this, $"Channel closed becuase error: {e.SocketError}", LogLevel.Error);
+					ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
 				}
+				Status = ICommChannel.EChannelStatus.Open;
+			}
+			else
+			{
+				Status = ICommChannel.EChannelStatus.Closed;
+				Logger?.Log(this, $"Channel closed becuase error: {e.SocketError}", LogLevel.Error);
+			}
+			return true;
+		}
+		private bool HandleReceiveEvent(CommToken token, SocketAsyncEventArgs e)
+		{
+			//TODO this but better, and make it work maybe use bytesWritten?
+			token.blob.Index += e.BytesTransferred;
+			builder.Receive(e.UserToken as CommToken, e.BytesTransferred, e);
+			return false;
+		}
+
+		public void EndOfStream() 
+		{
+			CloseChannel();
+			Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
+		}
+
+		private bool HandleSendEvent(SocketAsyncEventArgs e)
+        {
+			if (e.SocketError != SocketError.Success)
+			{
+				CloseChannel();
+				Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
+			}
+			else
+			{
+				Logger?.Log(this, $"Sent: {e.BytesTransferred}", LogLevel.Info);
+				Tactics.RequestSent();
+			}
+			return true;
+		}
+
+		public void HandleEvent(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
+		{
+			bool releaseEvent = false;
+			if (e.LastOperation == SocketAsyncOperation.Connect)
+			{
+				releaseEvent = HandleConnectEvent(e);
 			}
 			else if (e.LastOperation == SocketAsyncOperation.Receive)
 			{
-				//TODO this but better, and make it work maybe use bytesWritten?
-				blob.Index += e.BytesTransferred;
-				if (Mode == ICommChannel.EChannelMode.Managed)
-				{
-					if (modeTransition)
-					{
-						if (HandleSlowReceive(channel, blob, e))
-						{
-							return;
-						}
-					}
-					else
-					{
-						if (HandleManagedReceive(channel, blob, e))
-						{
-							return;
-						}
-					}
-				}
-				else
-				{
-					if (HandleRawReceive(channel, blob, e))
-					{
-						return;
-					}
-				}
+				releaseEvent = HandleReceiveEvent(e.UserToken as CommToken, e);
 			}
-			else if (e.LastOperation == SocketAsyncOperation.Send)
+            else if (e.LastOperation == SocketAsyncOperation.Send)
 			{
-				if (e.SocketError != SocketError.Success)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
-				}
-				else
-				{
-					Logger?.Log(this, $"Sent: {e.BytesTransferred}", LogLevel.Info);
-					Tactics.RequestSent();
-				}
+				releaseEvent = HandleSendEvent(e);
 			}
-			eventPool.Release(e);
-		}
 
-		private bool HandleSlowReceive(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
-		{
-			modeTransition = false;
-			if (e.SocketError == SocketError.Success)
+			if (releaseEvent)
 			{
-				if (e.BytesTransferred == 0)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
-				}
-				else
-				{
-					int availableBytes = e.BytesTransferred;
-					if (availableBytes < headerSize) //we have less data that needed for a header, go back to fast track
-					{
-						ContinueReceivingData(blob, e);
-						return true;
-					}
-					else
-					// slow track we may have more than 1 message or partial headers etc.
-					{
-						while (availableBytes > 0)
-						{
-							if (availableBytes < headerSize) //we have a partial header, create new blob release old one
-							{
-								BinaryBlob msgBlob = GetBlobFromPool(headerSize);
-								msgBlob.CopyDataFrom(blob, availableBytes);
-								blob.Release();
-								readingMode = EReadingMode.Header;
-								ContinueReceivingData(msgBlob, e);
-								return true;
-							}
-							else if (availableBytes >= headerSize) //we have header and extra data
-							{
-								availableBytes -= headerSize;
-								CommToken token = (CommToken)e.UserToken;
-								uint flagsAndSize = blob.ReadUInt();
-								token.headerFlags = ((CommToken.HeaderFlags)((flagsAndSize & 0xFF000000) >> 24));
-								bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
-								token.msgSize = bytesNeeded;
-								token.index = blob.ReadUShort();
-								
-								readingMode = EReadingMode.Data;
-
-
-								if (bytesNeeded > blob.BufferSize - headerSize) // we had some data but not enough place to hold the rest of the data
-								{
-									ReceiveData(bytesNeeded, blob, availableBytes);
-									return false;
-								}
-								else if (bytesNeeded <= availableBytes) // we have enough data for a complete message
-								{
-									BinaryBlob msgBlob = GetBlobFromPool(headerSize + bytesNeeded);
-									//AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
-									msgBlob.CopyDataFrom(blob, bytesNeeded);
-									availableBytes -= bytesNeeded;
-
-									msgBlob.JumpIndexToBegin();
-									if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
-									{
-										//int msgStart = msgBlob.Index;
-										msgBlob.Index = token.msgSize - 2;
-										ushort ackIndex = msgBlob.ReadUShort();
-										//msgBlob.Index = msgStart;
-										msgBlob.JumpIndexToBegin();
-										Tactics.EnqueueResponse(ackIndex, msgBlob);
-										msgBlob = null;//make sure we don't relase now we need it for TAP
-									}
-									else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
-									{
-										Tactics.RequestHandler?.Invoke(this, msgBlob, new TcpChannelRequestTicket(this, token.index));
-									}
-									else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
-									{
-										HandleProtocolBlob(msgBlob);
-									}
-									else
-									{
-										//beware: if we go async we may release the blob before the async function finishes
-										Tactics.BlobRecieved(msgBlob);
-									}
-									msgBlob?.Release();
-								}
-								else if (bytesNeeded >= availableBytes)//we continue requesting data in the normal handler
-								{
-									BinaryBlob msgBlob = GetBlobFromPool(bytesNeeded);
-									//AddHeader(msgBlob, token.headerFlags, (uint)token.msgSize, token.index);
-									msgBlob.CopyDataFrom(blob, availableBytes);
-									blob.Release();
-									readingMode = EReadingMode.Data;
-									ContinueReceivingData(msgBlob, e);
-									return true;
-								}
-							}
-						}
-						readingMode = EReadingMode.Header;
-						bytesNeeded = headerSize;
-						ReceiveData(headerSize, null);
-					}
-				}
+				eventPool.Release(e);
 			}
-			else
-			{
-				//avoid double close and bogous log messages if we closed the connection manually
-				if (status != ICommChannel.EChannelStatus.Closed)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
-				}
-			}
-			return false;
-		}
-
-		private bool HandleManagedReceive(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
-		{
-			if (e.SocketError == SocketError.Success)
-			{
-				if (e.BytesTransferred == 0)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
-				}
-				else
-				{
-					bytesNeeded -= e.BytesTransferred;
-					if (bytesNeeded == 0)
-					{
-						CommToken token = (CommToken)e.UserToken;
-						if (readingMode == EReadingMode.Header)
-						{
-							readingMode = EReadingMode.Data;
-							uint flagsAndSize = blob.ReadUInt();
-							token.headerFlags = ((CommToken.HeaderFlags)((flagsAndSize & 0xFF000000) >> 24));
-							bytesNeeded = (int)(flagsAndSize & 0x00FFFFFF);
-							token.msgSize = bytesNeeded;
-							token.index = blob.ReadUShort();
-							blob.JumpIndexToBegin();
-							if (bytesNeeded > blob.BufferSize)
-							{
-								ReceiveData(bytesNeeded/*, token*/);
-							}
-							else
-							{
-								ContinueReceivingData(blob, e);
-								return true;
-							}
-						}
-						else
-						{
-							blob.JumpIndexToBegin();
-							if ((token.headerFlags & CommToken.HeaderFlags.RpcAck) == CommToken.HeaderFlags.RpcAck)
-							{
-								//int msgStart = blob.Index;
-								blob.Index = token.msgSize - 2;
-								ushort ackIndex = blob.ReadUShort();
-								blob.JumpIndexToBegin();
-								//blob.Index = msgStart;
-								token.blob = null;//don't release the blob we need to keep it around for TAP, we release later
-								Tactics.EnqueueResponse(ackIndex, blob);
-							}
-							else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
-							{
-								Tactics.RequestHandler?.Invoke(this, blob, new TcpChannelRequestTicket(this, token.index));
-							}
-							else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
-							{
-								HandleProtocolBlob(blob);
-							}
-							else
-							{
-								//beware: if we go async we may release the blob before the async function finishes
-								Tactics.BlobRecieved(blob);
-							}
-
-							readingMode = EReadingMode.Header;
-							bytesNeeded = headerSize;
-							ReceiveData(headerSize, null);
-						}
-					}
-					else
-					{
-						ContinueReceivingData(blob, e);
-						return true;
-					}
-
-				}
-			}
-			else
-			{
-				//avoid double close and bogous log messages if we closed the connection manually
-				if (status != ICommChannel.EChannelStatus.Closed)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
-				}
-			}
-			return false;
-		}
-
-		private bool HandleRawReceive(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
-		{
-			if (e.SocketError == SocketError.Success)
-			{
-				if (e.BytesTransferred == 0)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase recevied EOS", LogLevel.Info);
-				}
-				else
-				{
-					bytesNeeded = Tactics.RawDataInterpreter != null ? Tactics.RawDataInterpreter.OnDataArrived(channel, blob, e.BytesTransferred) : 0;
-					if (bytesNeeded == 0)
-					{
-						bytesNeeded = bufferPool[RawPoolIndex].BlobSize;
-						ReceiveData(bufferPool[RawPoolIndex].BlobSize, null);
-						if (Tactics.RawDataInterpreter is IContinuable ac)
-						{
-							ac.Continue();
-						}
-
-					}
-					else
-					{
-						ContinueReceivingData(blob, e);
-						return true;
-					}
-				}
-			}
-			else
-			{
-				//avoid double close and bogous log messages if we closed the connection manually
-				if (status != ICommChannel.EChannelStatus.Closed)
-				{
-					CloseChannel();
-					Logger?.Log(this, $"Closing channel becuase error: {e.SocketError}", LogLevel.Error);
-				}
-			}
-			return false;
-		}
+        }
 
 		private void HandleProtocolBlob(BinaryBlob blob)
 		{
@@ -570,14 +359,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 			return returnVal;
 		}
 
-		private void AddHeader(BinaryBlob blob, CommToken.HeaderFlags flags, uint size, ushort index)
-		{
-			uint flagAndSize = (uint)((byte)flags << 24);
-			flagAndSize |= (uint)(size);
-			blob.AddUInt(flagAndSize);
-			blob.AddUShort(index);
-		}
-
 		private void Ping()
 		{
 			BinaryBlob blob = CreateMessage();
@@ -586,7 +367,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 		}
 
 
-		private BinaryBlob GetBlobFromPool(int size)
+		public BinaryBlob GetBlobFromPool(int size)
 		{
 			int poolIdx = -1;
 			for (int i = 0; i < bufferPool.Length; i++)
@@ -605,36 +386,22 @@ namespace Detekonai.Networking.Runtime.Tcp
 		}
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
-		private void ReceiveData(int size,/* CommToken token, */BinaryBlob originalBlob = null, int partialDataSize = 0)
+		public void ReceiveData(int size, BinaryBlob originalBlob = null, int partialDataSize = 0)
 		{
 			var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 
 			BinaryBlob blob = GetBlobFromPool(size);
 
-			//if (token != null)
+			if (originalBlob != null)
 			{
-				//if (evt.UserToken is CommToken ct)
-				//{
-				//	ct.index = token.index;
-				//	ct.msgSize = token.msgSize;
-				//	ct.headerFlags = token.headerFlags;
-				//	//add back the header to make it the same format as a single-read message
-				//	AddHeader(blob, ct.headerFlags, (uint)ct.msgSize, ct.index);
-				//}
-				if (originalBlob != null)
-				{
-					blob.CopyDataFrom(originalBlob, partialDataSize);
-				}
+				blob.CopyDataFrom(originalBlob, partialDataSize);
 			}
-			eventPool.ConfigureSocketToRead(blob, evt, size);
-			if (client != null && !client.ReceiveAsync(evt))
-			{
-				eventHandlingStrategy.EnqueueEvent(evt);
-			}
+
+			ContinueReceivingData(size, blob, evt);
 		}
-		private void ContinueReceivingData(BinaryBlob blob, SocketAsyncEventArgs evt)
+		public void ContinueReceivingData(int size, BinaryBlob blob, SocketAsyncEventArgs evt)
 		{
-			eventPool.ConfigureSocketToRead(blob, evt, bytesNeeded);
+			eventPool.ConfigureSocketToRead(blob, evt, size);
 			if (client != null && !client.ReceiveAsync(evt))
 			{
 				eventHandlingStrategy.EnqueueEvent(evt);
@@ -674,5 +441,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 			CloseChannel();
 			Tactics.Shutdown();
 		}
-	}
+
+    }
 }
