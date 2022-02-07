@@ -135,7 +135,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 							handler.CommReceived(token);
 							readingMode = EReadingMode.Header;
 							bytesNeeded = headerSize;
-							blob?.Release();
+							token.blob?.Release();
 							handler.ContinueReceivingData(bytesNeeded, handler.GetBlobFromPool(headerSize), e);
 						}
 						else if (bytesNeeded > blob.BufferSize)
@@ -154,7 +154,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 						readingMode = EReadingMode.Header;
 						bytesNeeded = headerSize;
-						blob?.Release();
+						token.blob?.Release();
 						handler.ContinueReceivingData(bytesNeeded, handler.GetBlobFromPool(headerSize), e);
 					}
 				}

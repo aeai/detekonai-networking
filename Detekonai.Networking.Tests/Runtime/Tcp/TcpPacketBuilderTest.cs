@@ -103,7 +103,7 @@ namespace Detekonai.Networking.Tests.Runtime.Tcp
             
             Assert.Throws<InvalidOperationException>( () => builder.Receive(token, 6, args), "If there is no suitable blob pool we throw an exception");
             handler.DidNotReceiveWithAnyArgs().CommReceived(default);
-            Assert.That(pool.AvailableChunks, Is.EqualTo(5), "All blobs nust be released at the end");
+            Assert.That(pool.AvailableChunks, Is.EqualTo(5), "All blobs must be released at the end");
             Assert.That(smallPool.AvailableChunks, Is.EqualTo(2), "Original blob should be released");
         }
 
@@ -130,6 +130,54 @@ namespace Detekonai.Networking.Tests.Runtime.Tcp
 
             Assert.That(finalValue, Is.EqualTo(msg), "We shoud get the complete message");
             Assert.That(pool.AvailableChunks, Is.EqualTo(5), "All blobs must be released at the end");
+        }
+
+        [Test]
+        public void Recieve_a_package_we_handle_with_TAP()
+        {
+            string msg = "Hey there is a message";
+            int msgSize = msg.Length + 4;
+            string msg2 = "Another message";
+            int msg2Size = msg.Length + 4;
+            var handler = Substitute.For<TcpPacketBuilder.ITcpPacketHandler>();
+            TcpPacketBuilder builder = new TcpPacketBuilder(handler);
+
+            token.blob = pool.GetBlob();
+            TcpPacketBuilder.AddHeader(token.blob, CommToken.HeaderFlags.None, (uint)msgSize, 1);
+            string finalValue2 = "";
+            BinaryBlob tapBlob = null;
+            handler.GetBlobFromPool(Arg.Any<int>()).Returns(x => pool.GetBlob());
+            handler.When(x => x.CommReceived(Arg.Any<CommToken>())).Do(Callback
+                .First(x => {
+                    tapBlob = x.Arg<CommToken>().blob;
+                    x.Arg<CommToken>().blob = null; //keep the blob for later(eg for TAP)
+                }).Then(x => {
+                    finalValue2 = x.Arg<CommToken>().blob.ReadString();
+                })
+                );
+            handler.WhenForAnyArgs(x => x.ContinueReceivingData(default, default, default)).Do(Callback
+                .First(x => {
+                    token.blob = x.Arg<BinaryBlob>();
+                    token.blob.AddString(msg);
+                    builder.Receive(token, msgSize, args);
+                }).Then(x => {
+                    token.blob = x.Arg<BinaryBlob>();
+                    TcpPacketBuilder.AddHeader(token.blob, CommToken.HeaderFlags.None, (uint)msgSize, 2);
+                    builder.Receive(token, 6, args);
+                }).Then(x => {
+                    token.blob = x.Arg<BinaryBlob>();
+                    token.blob.AddString(msg2);
+                    builder.Receive(token, msg2Size, args);
+                })
+            );
+
+            builder.Receive(token, 6, args);
+
+            Assert.That(tapBlob, Is.Not.Null, "Blob selected for TAP should not be null");
+            Assert.That(tapBlob.InUse, Is.True, "Blob selected for TAP should not be released");
+            Assert.That(tapBlob.ReadString(), Is.EqualTo(msg), "We shoud get the complete message");
+            Assert.That(finalValue2, Is.EqualTo(msg2), "We shoud get the complete message");
+            Assert.That(pool.AvailableChunks, Is.EqualTo(3), "All blobs except the active one and the TAP one must be released at the end");
         }
 
         [Test]
