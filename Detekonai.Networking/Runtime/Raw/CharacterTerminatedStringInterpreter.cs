@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
@@ -58,6 +59,19 @@ namespace Detekonai.Networking.Runtime.Raw
         public void Continue()
         {
             awaiterFactory.Continue();
+        }
+
+        public UniversalAwaitable<string> SendRpc(ICommChannel channel, BinaryBlob blob, CancellationToken token)
+        {
+            UniversalAwaitable<string> res = SendRpc(channel, blob);
+            token.Register(res.CancelRequest);
+            return res;
+        }
+        public UniversalAwaitable<string> AwaitData(CancellationToken token)
+        {
+            UniversalAwaitable<string> res = AwaitData();
+            token.Register(res.CancelRequest);
+            return res;
         }
     }
 }
