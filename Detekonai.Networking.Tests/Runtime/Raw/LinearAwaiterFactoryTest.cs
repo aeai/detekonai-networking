@@ -1,10 +1,7 @@
-﻿using Detekonai.Networking.Runtime.AsyncEvent;
+﻿using Detekonai.Core.Common.Runtime.ThreadAgent;
+using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Raw;
 using NUnit.Framework;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +12,7 @@ namespace Detekonai.Networking.Tests.Runtime.Raw
         [Test]
         public async Task We_can_await()
         {
-            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>();
+            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>(new ImmediateThreadAgent());
             var awaitable = new UniversalAwaitable<string>(factory.Create());
 
             Task.Run(async () =>
@@ -34,7 +31,7 @@ namespace Detekonai.Networking.Tests.Runtime.Raw
         [Test]
         public async Task We_can_timeout()
         {
-            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>();
+            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>(new ImmediateThreadAgent());
             var awaitable = new UniversalAwaitable<string>(factory.Create());
 
             Task.Run(async () =>
@@ -57,7 +54,7 @@ namespace Detekonai.Networking.Tests.Runtime.Raw
         [Test]
         public async Task We_can_finish_normaly_even_when_we_have_timout_set()
         {
-            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>();
+            LinearAwaiterFactory<string> factory = new LinearAwaiterFactory<string>(new ImmediateThreadAgent());
             var awaitable = new UniversalAwaitable<string>(factory.Create());
 
             Task.Run(async () =>

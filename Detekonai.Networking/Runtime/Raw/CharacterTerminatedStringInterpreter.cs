@@ -1,17 +1,14 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common.Runtime.ThreadAgent;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
     public class CharacterTerminatedStringInterpreter : IRawCommInterpreterAsync<string>, IContinuable
     {
-        private readonly LinearAwaiterFactory<string> awaiterFactory = new LinearAwaiterFactory<string>();
+        private readonly LinearAwaiterFactory<string> awaiterFactory;
 
         private int dataCounter = 0;
 
@@ -21,14 +18,14 @@ namespace Detekonai.Networking.Runtime.Raw
         {
             dataCounter += bytesTransfered;
             blob.Index = dataCounter - 1;
-            if(blob.ReadByte() == Terminator)
+            if (blob.ReadByte() == Terminator)
             {
                 blob.JumpIndexToBegin();
                 awaiterFactory.SetResponse(blob.ReadFixedString(dataCounter));
                 dataCounter = 0;
                 return 0;
             }
-            else if(blob.Index == blob.BufferSize)
+            else if (blob.Index == blob.BufferSize)
             {
                 throw new IndexOutOfRangeException("We ran out of buffer space!");
             }
@@ -38,8 +35,9 @@ namespace Detekonai.Networking.Runtime.Raw
             }
         }
 
-        public CharacterTerminatedStringInterpreter(char terminator)
+        public CharacterTerminatedStringInterpreter(char terminator, IThreadAgent threadAgent)
         {
+            awaiterFactory = new LinearAwaiterFactory<string>(threadAgent);
             Terminator = terminator;
         }
 

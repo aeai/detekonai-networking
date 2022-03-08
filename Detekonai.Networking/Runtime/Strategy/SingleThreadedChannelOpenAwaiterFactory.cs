@@ -1,17 +1,15 @@
-﻿using Detekonai.Networking.Runtime.AsyncEvent;
+﻿using Detekonai.Core.Common.Runtime.ThreadAgent;
+using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Strategy
 {
     public class SingleThreadedChannelOpenAwaiterFactory
     {
         private readonly ICommChannel owner;
-        
-        public event Action OnFinished;
+        private readonly IThreadAgent threadAgent;
+
+        //public event Action OnFinished;
 
         private class OpenChannelResult
         {
@@ -19,19 +17,13 @@ namespace Detekonai.Networking.Runtime.Strategy
             public Action continuation;
         }
 
-        private OpenChannelResult runningOpenRequest  = null;
+        private OpenChannelResult runningOpenRequest = null;
 
         private struct ChannelOpenAwaiter : IUniversalAwaiter<bool>
         {
             private readonly SingleThreadedChannelOpenAwaiterFactory owner;
 
-            public bool IsCompleted
-            {
-                get
-                {
-                    return owner.owner.Status == ICommChannel.EChannelStatus.Open || (owner.runningOpenRequest != null && owner.runningOpenRequest.requestStatus != AwaitResponseStatus.Pending);
-                }
-            }
+            public bool IsCompleted => owner.owner.Status == ICommChannel.EChannelStatus.Open || (owner.runningOpenRequest != null && owner.runningOpenRequest.requestStatus != AwaitResponseStatus.Pending);
 
             public bool IsInitialized { get; private set; }
 
@@ -43,7 +35,13 @@ namespace Detekonai.Networking.Runtime.Strategy
 
             public void Cancel()
             {
+                if (IsInitialized == false)
+                {
+                    owner.runningOpenRequest = new OpenChannelResult();
+                    IsInitialized = true;
+                }
                 owner.runningOpenRequest.requestStatus = AwaitResponseStatus.Canceled;
+                owner.threadAgent.ExecuteOnThread(owner.Finish);
             }
 
             public bool GetResult()
@@ -53,30 +51,27 @@ namespace Detekonai.Networking.Runtime.Strategy
 
             public void OnCompleted(Action continuation)
             {
-                owner.runningOpenRequest = new OpenChannelResult() { continuation = continuation, requestStatus = AwaitResponseStatus.Pending };
-                IsInitialized = true;
+                if (IsInitialized)
+                {
+                    owner.runningOpenRequest.continuation = continuation;
+                }
+                else
+                {
+                    owner.runningOpenRequest = new OpenChannelResult() { continuation = continuation, requestStatus = AwaitResponseStatus.Pending };
+                    IsInitialized = true;
+                }
             }
         }
 
 
-        public bool Finished {
-            get
-            {
-                return runningOpenRequest != null && runningOpenRequest.requestStatus != AwaitResponseStatus.Pending;
-            }
-        }
+        public bool Finished => runningOpenRequest != null && runningOpenRequest.requestStatus != AwaitResponseStatus.Pending;
 
-        public bool Canceled
-        {
-            get
-            {
-                return runningOpenRequest != null && runningOpenRequest.requestStatus == AwaitResponseStatus.Canceled;
-            }
-        }
+        public bool Canceled => runningOpenRequest != null && runningOpenRequest.requestStatus == AwaitResponseStatus.Canceled;
 
-        public SingleThreadedChannelOpenAwaiterFactory(ICommChannel channel)
+        public SingleThreadedChannelOpenAwaiterFactory(ICommChannel channel, IThreadAgent threadAgent)
         {
             owner = channel;
+            this.threadAgent = threadAgent;
         }
 
         public void SignalOpenChannel()
@@ -84,7 +79,8 @@ namespace Detekonai.Networking.Runtime.Strategy
             if (runningOpenRequest != null)
             {
                 runningOpenRequest.requestStatus = AwaitResponseStatus.Finished;
-                OnFinished?.Invoke();
+                //  OnFinished?.Invoke();
+                threadAgent.ExecuteOnThread(Finish);
             }
         }
 
@@ -93,7 +89,7 @@ namespace Detekonai.Networking.Runtime.Strategy
             return new ChannelOpenAwaiter(this);
         }
 
-        public void Invoke()
+        private void Finish()
         {
             if (Finished)
             {
@@ -111,7 +107,8 @@ namespace Detekonai.Networking.Runtime.Strategy
             if (runningOpenRequest != null)
             {
                 runningOpenRequest.requestStatus = AwaitResponseStatus.Canceled;
-                OnFinished?.Invoke();
+                // OnFinished?.Invoke();
+                threadAgent.ExecuteOnThread(Finish);
             }
         }
 

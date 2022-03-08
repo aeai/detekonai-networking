@@ -1,11 +1,7 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common.Runtime.ThreadAgent;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Raw;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Strategy
 {
@@ -13,14 +9,14 @@ namespace Detekonai.Networking.Runtime.Strategy
     {
         private SingleThreadedChannelOpenAwaiterFactory openAwaiterFactory = null;
         private SingleThreadedBlobAwaiterFactory blobAwaiterFactory = null;
-
+        private IThreadAgent agent = new ImmediateThreadAgent();
         public event ICommTactics.BlobReceivedHandler OnBlobReceived;
         public event ICommTactics.CommChannelChangeHandler OnRequestSent;
         public event ICommTactics.CommChannelChangeHandler OnConnectionStatusChanged;
         public event ICommTactics.TacticsCompleted OnTacticsCompleted;
 
         public ICommChannel Owner { get; private set; }
-        public ICommTactics.RequestReceivedHandler RequestHandler { get ; set ; }
+        public ICommTactics.RequestReceivedHandler RequestHandler { get; set; }
         public IRawCommInterpreter RawDataInterpreter { get; set; }
 
         public CommTacticsFinalizerHelper TacticsFinalizer { get; private set; }
@@ -28,26 +24,20 @@ namespace Detekonai.Networking.Runtime.Strategy
         public PasshtrouCommTactics(ICommChannel channel)
         {
             Owner = channel;
-            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(channel);
-            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, CancelRequest);
+            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(channel, agent);
+            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, agent);
             TacticsFinalizer = new CommTacticsFinalizerHelper(() => { OnTacticsCompleted?.Invoke(this); });
         }
-        
+
         public void Shutdown()
         {
             TacticsFinalizer.Execute();
         }
 
-        private void CancelRequest(ushort idx)
-        {
-            blobAwaiterFactory.Cancel(idx);
-        }
-
         public void CancelAllRequests()
         {
-            blobAwaiterFactory.ScheduleCancelAll();
+            blobAwaiterFactory.CancelAll();
             openAwaiterFactory.Cancel();
-            openAwaiterFactory.Invoke();
         }
 
         public IUniversalAwaiter<bool> CreateOpenAwaiter()
@@ -87,10 +77,9 @@ namespace Detekonai.Networking.Runtime.Strategy
 
         public void StatusChanged()
         {
-            if(Owner.Status == ICommChannel.EChannelStatus.Open)
+            if (Owner.Status == ICommChannel.EChannelStatus.Open)
             {
                 openAwaiterFactory.SignalOpenChannel();
-                openAwaiterFactory.Invoke();
             }
             OnConnectionStatusChanged?.Invoke(Owner);
         }

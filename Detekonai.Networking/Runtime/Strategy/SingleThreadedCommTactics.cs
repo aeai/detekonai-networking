@@ -1,31 +1,25 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common.Runtime.ThreadAgent;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Raw;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Strategy
 {
     public class SingleThreadedCommTactics : ICommTactics
     {
-        private readonly ConcurrentQueue<ushort> cancelRequestQueue = new ConcurrentQueue<ushort>();
         private SingleThreadedChannelOpenAwaiterFactory openAwaiterFactory = null;
         private SingleThreadedBlobAwaiterFactory blobAwaiterFactory = null;
-
+        private readonly ManualThreadAgent agent = new ManualThreadAgent();
         public event ICommTactics.BlobReceivedHandler OnBlobReceived;
         public event ICommTactics.CommChannelChangeHandler OnRequestSent;
         public event ICommTactics.CommChannelChangeHandler OnConnectionStatusChanged;
         public event ICommTactics.TacticsCompleted OnTacticsCompleted;
 
         public ICommChannel Owner { get; private set; }
-        public ICommTactics.RequestReceivedHandler RequestHandler { get; set ; }
+        public ICommTactics.RequestReceivedHandler RequestHandler { get; set; }
         public IRawCommInterpreter RawDataInterpreter { get; set; }
 
-        private enum EStatus 
+        private enum EStatus
         {
             Active,
             PreCleanUp,
@@ -46,14 +40,9 @@ namespace Detekonai.Networking.Runtime.Strategy
         public SingleThreadedCommTactics(ICommChannel channel)
         {
             Owner = channel;
-            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(channel);
-            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, CancelRequest);
+            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(channel, agent);
+            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, agent);
             TacticsFinalizer = new CommTacticsFinalizerHelper(() => { status = EStatus.Finalized; OnTacticsCompleted?.Invoke(this); });
-        }
-
-        private void CancelRequest(ushort idx)
-        {
-            cancelRequestQueue.Enqueue(idx);
         }
 
         public IUniversalAwaiter<bool> CreateOpenAwaiter()
@@ -79,7 +68,7 @@ namespace Detekonai.Networking.Runtime.Strategy
 
         public void CancelAllRequests()
         {
-            blobAwaiterFactory.ScheduleCancelAll();
+            blobAwaiterFactory.CancelAll();
             openAwaiterFactory.Cancel();
         }
 
@@ -98,18 +87,7 @@ namespace Detekonai.Networking.Runtime.Strategy
             }
             else
             {
-                while (!cancelRequestQueue.IsEmpty)
-                {
-                    if (cancelRequestQueue.TryDequeue(out ushort idx))
-                    {
-                        blobAwaiterFactory.Cancel(idx);
-                    }
-                }
-
-                if (openAwaiterFactory.Finished)
-                {
-                    openAwaiterFactory.Invoke();
-                }
+                agent.ProcessAll();
             }
         }
 

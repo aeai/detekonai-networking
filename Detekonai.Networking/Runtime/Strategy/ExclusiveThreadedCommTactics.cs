@@ -1,4 +1,5 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common.Runtime;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Raw;
 using System;
@@ -13,7 +14,6 @@ namespace Detekonai.Networking.Runtime.Strategy
 {
     public class ExclusiveThreadedCommTactics : ICommTactics
     {
-
         private SingleThreadedChannelOpenAwaiterFactory openAwaiterFactory = null;
         private SingleThreadedBlobAwaiterFactory blobAwaiterFactory = null;
         public ICommChannel Owner { get; private set; }
@@ -35,9 +35,8 @@ namespace Detekonai.Networking.Runtime.Strategy
         {
             Owner = owner;
             ctx = new ChannelSyncronizationContext(name+"Thread");
-            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(owner);
-            openAwaiterFactory.OnFinished += OpenAwaiterFactory_OnFinished;
-            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, CancelRequest);
+            openAwaiterFactory = new SingleThreadedChannelOpenAwaiterFactory(owner, ctx);        
+            blobAwaiterFactory = new SingleThreadedBlobAwaiterFactory(this, ctx);
             TacticsFinalizer = new CommTacticsFinalizerHelper(() => {
                 ctx.Close();
                 OnTacticsCompleted?.Invoke(this);
@@ -47,16 +46,6 @@ namespace Detekonai.Networking.Runtime.Strategy
         public void Post(SendOrPostCallback callback, object ob)
         {
             ctx.Post(callback, ob);
-        }
-
-        private void OpenAwaiterFactory_OnFinished()
-        {
-            ctx.Post(FinishChannelOpen, null);
-        }
-
-        private void FinishChannelOpen(object ob)
-        {
-            openAwaiterFactory.Invoke();
         }
 
         public void Shutdown()
@@ -72,16 +61,6 @@ namespace Detekonai.Networking.Runtime.Strategy
             }
         }
 
-        private void CancelRequestCallback(object idx)
-        {
-            blobAwaiterFactory.Cancel((ushort)idx);
-        }
-
-        private void CancelRequest(ushort idx)
-        {
-            ctx.Post(CancelRequestCallback, idx);
-        }
-
         private void RunCommCallback(object e)
         {
             SocketAsyncEventArgs evt = (SocketAsyncEventArgs)e;
@@ -93,7 +72,7 @@ namespace Detekonai.Networking.Runtime.Strategy
 
         public void CancelAllRequests()
         {
-            blobAwaiterFactory.ScheduleCancelAll();
+            blobAwaiterFactory.CancelAll();
             openAwaiterFactory.Cancel();
         }
 

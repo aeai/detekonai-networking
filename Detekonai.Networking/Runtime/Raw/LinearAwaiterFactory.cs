@@ -1,10 +1,7 @@
-﻿using Detekonai.Networking.Runtime.AsyncEvent;
+﻿using Detekonai.Core.Common.Runtime.ThreadAgent;
+using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Raw
 {
@@ -28,7 +25,7 @@ namespace Detekonai.Networking.Runtime.Raw
 
             public M GetResult()
             {
-                if(!resultCached)//we cache so we can call GetResult multiple times if needs be
+                if (!resultCached)//we cache so we can call GetResult multiple times if needs be
                 {
                     resultCached = true;
                     owner.results.TryDequeue(out result);
@@ -51,17 +48,31 @@ namespace Detekonai.Networking.Runtime.Raw
         private Action continuation = null;
         private AwaitResponseStatus status = AwaitResponseStatus.Pending;
         private readonly ConcurrentQueue<T> results = new ConcurrentQueue<T>();
+        private readonly IThreadAgent threadAgent;
+
+        public LinearAwaiterFactory(IThreadAgent threadAgent)
+        {
+            this.threadAgent = threadAgent;
+        }
+
         public IUniversalAwaiter<T> Create()
         {
             if (continuation != null)
             {
-                Cancel();
+                throw new InvalidOperationException("Linear awaiter is currently pending, you need to cancel or finish before starting a new await!");
             }
             status = AwaitResponseStatus.Pending;
             return new LinearAwaiter<T>(this);
         }
 
+
         public void Cancel()
+        {
+            //TODO maybe we need a lock here? can this be called multiple times?
+            threadAgent.ExecuteOnThread(CancelInternal);
+        }
+
+        public void CancelInternal()
         {
             if (status == AwaitResponseStatus.Pending)
             {
@@ -80,7 +91,7 @@ namespace Detekonai.Networking.Runtime.Raw
             }
         }
 
-        public void Continue() 
+        public void Continue()
         {
             if (status == AwaitResponseStatus.Pending)
             {

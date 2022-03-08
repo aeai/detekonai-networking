@@ -1,11 +1,8 @@
 ﻿using Detekonai.Core;
+using Detekonai.Core.Common.Runtime.ThreadAgent;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Detekonai.Networking.Runtime.Strategy
 {
@@ -14,8 +11,7 @@ namespace Detekonai.Networking.Runtime.Strategy
         private readonly ConcurrentDictionary<ushort, CommResponse> awaiters = new ConcurrentDictionary<ushort, CommResponse>();
 
         private readonly ICommTactics owner;
-
-        private readonly Action<ushort> cancelAction;
+        private readonly IThreadAgent agent;
 
         private struct SingleThreadedBlobAwaiter : IUniversalAwaiter<ICommResponse>
         {
@@ -29,19 +25,13 @@ namespace Detekonai.Networking.Runtime.Strategy
                 IsInitialized = false;
             }
 
-            public bool IsCompleted
-            {
-                get
-                {
-                    return owner.awaiters.TryGetValue(idx, out CommResponse cwr) && cwr.Status != AwaitResponseStatus.Pending;
-                }
-            }
+            public bool IsCompleted => owner.awaiters.TryGetValue(idx, out CommResponse cwr) && cwr.Status != AwaitResponseStatus.Pending;
 
             public bool IsInitialized { get; private set; }
 
             public void Cancel()
             {
-                owner.cancelAction?.Invoke(idx);
+                owner.Cancel(idx);
             }
 
             public ICommResponse GetResult()
@@ -57,26 +47,36 @@ namespace Detekonai.Networking.Runtime.Strategy
             }
         }
 
-        public SingleThreadedBlobAwaiterFactory(ICommTactics owner, Action<ushort> cancelAction)
+        public SingleThreadedBlobAwaiterFactory(ICommTactics owner, IThreadAgent agent)
         {
             this.owner = owner;
-            this.cancelAction = cancelAction;
+            this.agent = agent;
         }
 
-        public IUniversalAwaiter<ICommResponse>  Create(ushort messageIdx)
+        public IUniversalAwaiter<ICommResponse> Create(ushort messageIdx)
         {
             return new SingleThreadedBlobAwaiter(this, messageIdx);
         }
 
-        public void ScheduleCancelAll()
+        public void CancelAll()
+        {
+            agent.ExecuteOnThread(CancelAllInternal);
+        }
+
+        private void CancelAllInternal()
         {
             foreach (ushort cr in awaiters.Keys)
             {
-                cancelAction(cr);
+                CancelInternal(cr);
             }
         }
 
-        public void Cancel(ushort msgIdx)
+        public void Cancel(ushort idx)
+        {
+            agent.ExecuteOnThread(() => CancelInternal(idx));
+        }
+
+        private void CancelInternal(ushort msgIdx)
         {
             if (awaiters.TryGetValue(msgIdx, out CommResponse cwr))
             {
