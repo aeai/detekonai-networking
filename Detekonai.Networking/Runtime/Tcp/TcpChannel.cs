@@ -257,7 +257,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			//TODO this but better, and make it work maybe use bytesWritten?
 			token.blob.Index += e.BytesTransferred;
 			builder.Receive(e.UserToken as CommToken, e.BytesTransferred, e);
-			return false;
+			return e.BytesTransferred == 0;
 		}
 
 		public void EndOfStream() 
