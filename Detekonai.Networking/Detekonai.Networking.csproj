@@ -16,7 +16,9 @@
   <ItemGroup Condition=" '$(Configuration)' == 'MasterDebug' ">
     <ProjectReference Include="..\..\detekonai-binaryblob\Detekonai.Core.BinaryBlob\Detekonai.Core.BinaryBlob.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.6" />
+  <ItemGroup Condition=" '$(Configuration)' != 'MasterDebug' ">
+	<PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.6" />
+    <PackageReference Include="Detekonai.Core.Common" Version="0.0.3" />
   </ItemGroup>
+
 </Project>
