@@ -35,7 +35,10 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 		{
 			if (e.UserToken is CommToken comm)
             {
-				comm.strategy.EnqueueEvent(e);
+				if (comm.strategy != null)
+				{
+					comm.strategy.EnqueueEvent(e);
+				}
             }
 		}
 
