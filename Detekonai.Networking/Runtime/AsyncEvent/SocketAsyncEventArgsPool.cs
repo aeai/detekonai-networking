@@ -39,6 +39,10 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 				{
 					comm.strategy.EnqueueEvent(e);
 				}
+				else
+                {
+					Release(e);
+                }
             }
 		}
 
@@ -66,6 +70,7 @@ namespace Detekonai.Networking.Runtime.AsyncEvent
 			t.blob = null;
 			t.strategy = null;
 			t.tactics = null;
+			t.callback = null;
 			args.AcceptSocket = null;
 			args.SetBuffer(null, 0, 0);
 			args.SocketFlags = SocketFlags.None;
