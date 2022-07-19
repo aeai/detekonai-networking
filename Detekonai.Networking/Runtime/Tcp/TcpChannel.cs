@@ -218,7 +218,14 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 			else if ((token.headerFlags & CommToken.HeaderFlags.RequiresAnswer) == CommToken.HeaderFlags.RequiresAnswer)
 			{
-				Tactics.RequestHandler?.Invoke(this, blob, new TcpChannelRequestTicket(this, token.index));
+				if(Tactics.RequestHandler != null)
+                {
+					Tactics.RequestHandler.Invoke(this, blob, new TcpChannelRequestTicket(this, token.index));
+                }
+				else
+                {
+					Logger?.Log(this, "Request dropped because tactics don't have request handler set", LogLevel.Warning);
+                }
 			}
 			else if ((token.headerFlags & CommToken.HeaderFlags.SystemPackage) == CommToken.HeaderFlags.SystemPackage)
 			{

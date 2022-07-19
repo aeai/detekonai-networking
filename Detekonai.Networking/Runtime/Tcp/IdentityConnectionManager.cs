@@ -87,12 +87,21 @@ namespace Detekonai.Networking.Runtime.Tcp
             else
             {
                 ch = factory.CreateFrom((e.UserToken as CommToken).ownerSocket);
-                ch.Name = $"Ch-{id}";
-                Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
-                channels.TryAdd(ch.Name, ch);
-                Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
-                OnClientAccepted?.Invoke(ch);
-                ch.Tactics.OnConnectionStatusChanged += Tactics_OnConnectionStatusChanged;
+                if (ch != null)
+                {
+                    ch.Name = $"Ch-{id}";
+                    Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
+                    channels.TryAdd(ch.Name, ch);
+                    Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+                    OnClientAccepted?.Invoke(ch);
+                    ch.Tactics.OnConnectionStatusChanged += Tactics_OnConnectionStatusChanged;
+                }
+                else
+                {
+                    Logger?.Log(this, $"Failed to initialize channel! ", ILogConnector.LogLevel.Error);
+                    (e.UserToken as CommToken).ownerSocket.Sock.Shutdown(SocketShutdown.Both);
+                    (e.UserToken as CommToken).ownerSocket.Sock.Close();
+                }
             }
         }
 

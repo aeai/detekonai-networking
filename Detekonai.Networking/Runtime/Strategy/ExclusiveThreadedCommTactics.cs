@@ -30,7 +30,6 @@ namespace Detekonai.Networking.Runtime.Strategy
         public IRawCommInterpreter RawDataInterpreter { get; set; }
 
         public CommTacticsFinalizerHelper TacticsFinalizer { get; private set; }
-
         public ExclusiveThreadedCommTactics(ICommChannel owner, string name)
         {
             Owner = owner;

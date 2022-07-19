@@ -22,11 +22,20 @@ namespace Detekonai.Networking.Runtime.Tcp
 
         public void OnAccept(IConnectionData evt)
         {
-            int id = Interlocked.Increment(ref counter);
             TcpChannel ch = factory.CreateFrom(evt);
-            ch.Name = $"Channel-{id}";
-            OnClientAccepted?.Invoke(ch);
-            Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.Sock.RemoteEndPoint).Address}:{((IPEndPoint)evt.Sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+            if (ch != null)
+            {
+                int id = Interlocked.Increment(ref counter);
+                ch.Name = $"Channel-{id}";
+                OnClientAccepted?.Invoke(ch);
+                Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.Sock.RemoteEndPoint).Address}:{((IPEndPoint)evt.Sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+            }
+            else
+            {
+                Logger?.Log(this, $"Failed to initialize channel! ", ILogConnector.LogLevel.Error);
+                evt.Sock.Shutdown(SocketShutdown.Both);
+                evt.Sock.Close();
+            }
         }
 
     }

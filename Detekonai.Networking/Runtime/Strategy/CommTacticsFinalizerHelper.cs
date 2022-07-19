@@ -21,7 +21,14 @@ namespace Detekonai.Networking.Runtime.Strategy
                 {
                     tacticsFinalizer.OnDone -= doneCallback;
                 }
-                tacticsFinalizer = value;
+                if (value == null)
+                {
+                    tacticsFinalizer = new DefaultCommTacticsFinalizer();
+                }
+                else
+                {
+                    tacticsFinalizer = value;
+                }
                 tacticsFinalizer.OnDone += doneCallback;
             }
         }
