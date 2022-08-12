@@ -36,7 +36,7 @@ namespace Detekonai.Networking
 		UniversalAwaitable<ICommResponse> SendRPC(BinaryBlob blob);
 		UniversalAwaitable<ICommResponse> SendRPC(BinaryBlob blob, CancellationToken cancelationToken);
 
-		public ILogConnector Logger {get; set;}
+		public ILogger Logger {get; set;}
 		EChannelStatus Status { get; }
 		string Name { get; set; }
 		bool Reliable { get; }

@@ -17,7 +17,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		public ICommChannel.EChannelStatus Status { get; private set; } = ICommChannel.EChannelStatus.Closed;
 		private readonly IAsyncEventCommStrategy eventStrategy;
-		public ILogConnector Logger { get; set; }
+		public ILogger Logger { get; set; }
 		public ITcpConnectionManager ConnectionManager { get; set; } = null;
 
 		public int ListeningPort
@@ -42,7 +42,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			serverSocket?.Close();
 			serverSocket?.Dispose();
 			serverSocket = null;
-			Logger?.Log(this, $"TCP server closed {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
+			Logger?.Log(this, $"TCP server closed {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogger.LogLevel.Info);
 			Status = ICommChannel.EChannelStatus.Closed;
 		}
 
@@ -56,7 +56,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			serverSocket.Bind(tcpEndpoint);
 			serverSocket.Listen(10000);
-			Logger?.Log(this, $"TCP channel opening for host {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
+			Logger?.Log(this, $"TCP channel opening for host {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogger.LogLevel.Info);
 			Status = ICommChannel.EChannelStatus.Open;
 			Accept();
 		}
@@ -76,7 +76,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		public void Dispose()
 		{
-			Logger?.Log(this, $"TCP channel disposed for host {tcpEndpoint.Address.ToString()} and port {tcpEndpoint.Port}", ILogConnector.LogLevel.Info);
+			Logger?.Log(this, $"TCP channel disposed for host {tcpEndpoint.Address.ToString()} and port {tcpEndpoint.Port}", ILogger.LogLevel.Info);
 			CloseChannel();
 		}
 
@@ -90,7 +90,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				}
 				else
                 {
-					Logger?.Log(this, $"Error accepting socket: {e.SocketError}", ILogConnector.LogLevel.Error);
+					Logger?.Log(this, $"Error accepting socket: {e.SocketError}", ILogger.LogLevel.Error);
 				}
 				Accept();
 			}

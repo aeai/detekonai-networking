@@ -7,7 +7,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using static Detekonai.Core.Common.ILogConnector;
+using static Detekonai.Core.Common.ILogger;
 using static Detekonai.Networking.ICommChannel;
 using static Detekonai.Networking.Runtime.Tcp.TcpPacketBuilder;
 
@@ -55,7 +55,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 		private SocketAsyncEventArgsPool eventPool;
 		private BinaryBlobPool[] bufferPool;
 		private ushort msgIndex = 1;
-		public ILogConnector Logger { get; set; }
+		public ILogger Logger { get; set; }
 
 		private ICommChannel.EChannelStatus status = ICommChannel.EChannelStatus.Closed;
 		private IAsyncEventCommStrategy eventHandlingStrategy;

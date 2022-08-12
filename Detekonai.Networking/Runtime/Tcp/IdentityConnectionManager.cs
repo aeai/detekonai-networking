@@ -24,7 +24,7 @@ namespace Detekonai.Networking.Runtime.Tcp
         private readonly ConcurrentDictionary<string, CancellationTokenSource> ChannelsOnHold = new ConcurrentDictionary<string, CancellationTokenSource>();
         private readonly ConcurrentDictionary<Socket, object> externalData = new ConcurrentDictionary<Socket, object>();
         public event ITcpConnectionManager.ClientAccepted OnClientAccepted;
-        public ILogConnector Logger { get; set; } = null;
+        public ILogger Logger { get; set; } = null;
         public int ReconnectTimeoutMillis { get; set; } = -1;
         public int IdTokenSize { get; set; } = 8;
         public IdentityConnectionManager(SocketAsyncEventArgsPool evPool, IAsyncEventCommStrategy eventHandlingStrategy, ICommChannelFactory<TcpChannel, IConnectionData> factory, BinaryBlobPool blobPool)
@@ -57,7 +57,7 @@ namespace Detekonai.Networking.Runtime.Tcp
                 {
                     cts.Dispose();
                 }
-                Logger?.Log(this, $"Channel-{id} is closed too long purging it...", ILogConnector.LogLevel.Verbose);
+                Logger?.Log(this, $"Channel-{id} is closed too long purging it...", ILogger.LogLevel.Verbose);
                 val.Dispose();
             }
         }
@@ -82,7 +82,7 @@ namespace Detekonai.Networking.Runtime.Tcp
             {
                 Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
                 ch.AssignSocket(sock);
-                Logger?.Log(this, $"TCP Ch-{id} returned from {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+                Logger?.Log(this, $"TCP Ch-{id} returned from {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogger.LogLevel.Verbose);
             }
             else
             {
@@ -92,13 +92,13 @@ namespace Detekonai.Networking.Runtime.Tcp
                     ch.Name = $"Ch-{id}";
                     Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
                     channels.TryAdd(ch.Name, ch);
-                    Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+                    Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogger.LogLevel.Verbose);
                     OnClientAccepted?.Invoke(ch);
                     ch.Tactics.OnConnectionStatusChanged += Tactics_OnConnectionStatusChanged;
                 }
                 else
                 {
-                    Logger?.Log(this, $"Failed to initialize channel! ", ILogConnector.LogLevel.Error);
+                    Logger?.Log(this, $"Failed to initialize channel! ", ILogger.LogLevel.Error);
                     (e.UserToken as CommToken).ownerSocket.Sock.Shutdown(SocketShutdown.Both);
                     (e.UserToken as CommToken).ownerSocket.Sock.Close();
                 }
@@ -149,7 +149,7 @@ namespace Detekonai.Networking.Runtime.Tcp
                     {
                         token.ownerSocket.Sock.Dispose();
                     }
-                    Logger?.Log(this, $"Error accepting socket identity: {e.SocketError}", ILogConnector.LogLevel.Error);
+                    Logger?.Log(this, $"Error accepting socket identity: {e.SocketError}", ILogger.LogLevel.Error);
                     
                 }
             }

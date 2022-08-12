@@ -8,7 +8,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using static Detekonai.Core.Common.ILogConnector;
+using static Detekonai.Core.Common.ILogger;
 using static Detekonai.Networking.ICommChannel;
 
 namespace Detekonai.Networking.Runtime.Tcp
@@ -22,7 +22,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			Data,
 		}
 
-		public ILogConnector Logger { get; set; }
+		public ILogger Logger { get; set; }
 
 		private EReadingMode readingMode = EReadingMode.Header;
 		private int bytesNeeded = headerSize;

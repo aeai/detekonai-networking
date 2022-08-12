@@ -8,6 +8,6 @@ namespace Detekonai.Networking.Runtime.Tcp
         public delegate void ClientAccepted(TcpChannel client);
         public event ClientAccepted OnClientAccepted;
         public void OnAccept(IConnectionData data);
-        public ILogConnector Logger { get; set; }
+        public ILogger Logger { get; set; }
     }
 }

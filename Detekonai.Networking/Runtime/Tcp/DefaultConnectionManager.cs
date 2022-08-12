@@ -13,7 +13,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
         private int counter = 0;
 
-        public ILogConnector Logger { get; set; } = null;
+        public ILogger Logger { get; set; } = null;
 
         public DefaultConnectionManager(ICommChannelFactory<TcpChannel, IConnectionData> factory)
         {
@@ -28,11 +28,11 @@ namespace Detekonai.Networking.Runtime.Tcp
                 int id = Interlocked.Increment(ref counter);
                 ch.Name = $"Channel-{id}";
                 OnClientAccepted?.Invoke(ch);
-                Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.Sock.RemoteEndPoint).Address}:{((IPEndPoint)evt.Sock.RemoteEndPoint).Port}", ILogConnector.LogLevel.Verbose);
+                Logger?.Log(this, $"TCP Channel-{id} assigned to {((IPEndPoint)evt.Sock.RemoteEndPoint).Address}:{((IPEndPoint)evt.Sock.RemoteEndPoint).Port}", ILogger.LogLevel.Verbose);
             }
             else
             {
-                Logger?.Log(this, $"Failed to initialize channel! ", ILogConnector.LogLevel.Error);
+                Logger?.Log(this, $"Failed to initialize channel! ", ILogger.LogLevel.Error);
                 evt.Sock.Shutdown(SocketShutdown.Both);
                 evt.Sock.Close();
             }
