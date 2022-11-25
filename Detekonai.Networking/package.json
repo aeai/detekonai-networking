@@ -1,6 +1,6 @@
 {
   "name": "com.detekonai.networking",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "displayName": "Detekonai Networking Stack",
   "description": "Usefull stuff to make online things",
   "unity": "2019.1",

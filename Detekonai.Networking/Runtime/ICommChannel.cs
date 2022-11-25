@@ -29,8 +29,9 @@ namespace Detekonai.Networking
 		void CloseChannel();
 		UniversalAwaitable<bool> OpenChannel();
 		UniversalAwaitable<bool> OpenChannel(CancellationToken cancelationToken);
-		BinaryBlob CreateMessage(int poolIndex = 0, bool raw = false);
 		BinaryBlob CreateMessageWithSize(int size = 0, bool raw = false);
+		Task<BinaryBlob> CreateMessageWithSizeAsync(CancellationToken cancelationToken, int size = 0, bool raw = false);
+
 		void Send(BinaryBlob blob);
 		ICommTactics Tactics { get; }
 		UniversalAwaitable<ICommResponse> SendRPC(BinaryBlob blob);

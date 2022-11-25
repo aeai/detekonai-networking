@@ -7,6 +7,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using static Detekonai.Core.Common.ILogger;
 using static Detekonai.Networking.ICommChannel;
 using static Detekonai.Networking.Runtime.Tcp.TcpPacketBuilder;
@@ -369,14 +370,13 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		private void Ping()
 		{
-			BinaryBlob blob = CreateMessage();
+			BinaryBlob blob = CreateMessageWithSize();
 			blob.AddByte((byte)SystemMessage.Ping);
 			Send(blob, CommToken.HeaderFlags.SystemPackage);
 		}
 
-
-		public BinaryBlob GetBlobFromPool(int size)
-		{
+		private BinaryBlobPool GetPoolForSize(int size)
+        {
 			int poolIdx = -1;
 			for (int i = 0; i < bufferPool.Length; i++)
 			{
@@ -390,14 +390,18 @@ namespace Detekonai.Networking.Runtime.Tcp
 			{
 				throw new InvalidOperationException($"Try to read a package which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length - 1].BlobSize}");
 			}
-			return bufferPool[poolIdx].GetBlob();
+			return bufferPool[poolIdx];
+		}
+		public BinaryBlob GetBlobFromPool(int size)
+		{
+			return GetPoolForSize(size).GetBlob();
 		}
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "SocketAsyncEventArgs handled by a pool, no dispose requred here")]
 		public void ReceiveData(int size, BinaryBlob originalBlob = null, int partialDataSize = 0)
 		{
 			var evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
-
+			//async????
 			BinaryBlob blob = GetBlobFromPool(size);
 
 			if (originalBlob != null)
@@ -416,27 +420,19 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 		}
 
+		public async Task<BinaryBlob> CreateMessageWithSizeAsync(CancellationToken cancelationToken, int size = 0, bool raw = false)
+        {
+			BinaryBlob blob = await GetPoolForSize(size).GetBlobAsync();
+			if (!raw)
+			{
+				blob.PrefixBuffer(headerSize);
+			}
+			return blob;
+		} 
+
 		public BinaryBlob CreateMessageWithSize(int size = 0, bool raw = false)
 		{
-			int poolIdx = -1;
-			for (int i = 0; i < bufferPool.Length; i++)
-			{
-				if (size < bufferPool[i].BlobSize)
-				{
-					poolIdx = i;
-					break;
-				}
-			}
-			if (poolIdx == -1)
-			{
-				throw new InvalidOperationException($"Try to create message which is bigger then the max buffer size! {size}> {bufferPool[bufferPool.Length - 1].BlobSize}");
-			}
-			return CreateMessage(poolIdx, raw);
-		}
-
-		public BinaryBlob CreateMessage(int poolIndex = 0, bool raw = false)
-		{
-			BinaryBlob blob = bufferPool[poolIndex].GetBlob();
+			BinaryBlob blob = GetPoolForSize(size).GetBlob();
 			if (!raw)
 			{
 				blob.PrefixBuffer(headerSize);

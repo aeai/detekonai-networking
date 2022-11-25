@@ -27,6 +27,7 @@ namespace Detekonai.Networking.Runtime.Strategy
 		RequestReceivedHandler RequestHandler { get; set; }
 		IRawCommInterpreter RawDataInterpreter { get; set; }
 		CommTacticsFinalizerHelper TacticsFinalizer { get;}
+		//if this async make sure you copy the blob or you will have problems
 		event BlobReceivedHandler OnBlobReceived;
 		event CommChannelChangeHandler OnRequestSent;
 		event CommChannelChangeHandler OnConnectionStatusChanged;
