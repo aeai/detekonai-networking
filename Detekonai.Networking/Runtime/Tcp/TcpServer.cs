@@ -53,7 +53,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 		/// <returns>True if the channel opens</returns>
 		public void OpenChannel()
 		{
-			serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			serverSocket = new Socket(tcpEndpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 			serverSocket.Bind(tcpEndpoint);
 			serverSocket.Listen(10000);
 			Logger?.Log(this, $"TCP channel opening for host {tcpEndpoint.Address} and port {tcpEndpoint.Port}", ILogger.LogLevel.Info);

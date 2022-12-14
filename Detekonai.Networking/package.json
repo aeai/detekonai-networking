@@ -1,6 +1,6 @@
 {
   "name": "com.detekonai.networking",
-  "version": "0.0.33",
+  "version": "0.0.37",
   "displayName": "Detekonai Networking Stack",
   "description": "Usefull stuff to make online things",
   "unity": "2019.1",
@@ -8,7 +8,7 @@
   "dependencies":
   {
 	"com.detekonai.core.common":"0.0.7",
-	"com.detekonai.core.binaryblob":"0.0.10"
+	"com.detekonai.core.binaryblob":"0.0.14"
   },
  "keywords": [
     "Networking",

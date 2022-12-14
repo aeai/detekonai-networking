@@ -62,7 +62,6 @@ namespace Detekonai.Networking.Runtime.Tcp
 		private IAsyncEventCommStrategy eventHandlingStrategy;
 		public ICommTactics Tactics { get; private set; }
 		public IPEndPoint Endpoint { get; private set; }
-
 		private int rawPoolIndex = 0;
 		public int RawPoolIndex
 		{
@@ -170,7 +169,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 				throw new InvalidOperationException("The channel address is not set, can't open the channel!");
 			}
 			msgIndex = 1;
-			client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			client = new Socket(Endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 			Status = ICommChannel.EChannelStatus.Establishing;
 			SocketAsyncEventArgs evt = eventPool.Take(this, eventHandlingStrategy, Tactics, HandleEvent);
 			evt.RemoteEndPoint = Endpoint;
@@ -284,7 +283,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 			}
 			else
 			{
-				Logger?.Log(this, $"Sent: {e.BytesTransferred}", LogLevel.Info);
+				Logger?.Log(this, $"Sent: {e.BytesTransferred}", LogLevel.Verbose);
 				Tactics.RequestSent();
 			}
 			return true;
