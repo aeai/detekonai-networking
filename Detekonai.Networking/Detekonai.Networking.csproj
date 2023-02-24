@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.0.41</Version>
+    <Version>0.0.42</Version>
     <Company>Detekonai</Company>
     <Authors>Aeai</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -17,7 +17,7 @@
     <ProjectReference Include="..\..\detekonai-binaryblob\Detekonai.Core.BinaryBlob\Detekonai.Core.BinaryBlob.csproj" />
   </ItemGroup>
   <ItemGroup Condition=" '$(Configuration)' != 'MasterDebug' ">
-	<PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.14" />
+	<PackageReference Include="Detekonai.Core.BinaryBlob" Version="0.0.15" />
   </ItemGroup>
 
 </Project>
