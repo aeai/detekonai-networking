@@ -2,6 +2,7 @@
 using Detekonai.Core.Common;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Strategy;
+using Detekonai.Networking.Tcp;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -86,11 +87,12 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
             else
             {
-                ch = factory.CreateFrom((e.UserToken as CommToken).ownerSocket);
+                var connData = new ConnectionDataWithIdentity((e.UserToken as CommToken).ownerSocket.Sock, id);
+                ch = factory.CreateFrom(connData);
                 if (ch != null)
                 {
                     ch.Name = $"Ch-{id}";
-                    Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
+                    Socket sock = connData.Sock;
                     channels.TryAdd(ch.Name, ch);
                     Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogger.LogLevel.Verbose);
                     OnClientAccepted?.Invoke(ch);

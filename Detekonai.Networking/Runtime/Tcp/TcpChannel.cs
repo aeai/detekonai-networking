@@ -291,18 +291,24 @@ namespace Detekonai.Networking.Runtime.Tcp
 
 		public void HandleEvent(ICommChannel channel, BinaryBlob blob, SocketAsyncEventArgs e)
 		{
-			bool releaseEvent = false;
+			bool releaseEvent = true;
 			if (e.LastOperation == SocketAsyncOperation.Connect)
 			{
 				releaseEvent = HandleConnectEvent(e);
 			}
 			else if (e.LastOperation == SocketAsyncOperation.Receive)
 			{
-				releaseEvent = HandleReceiveEvent(e.UserToken as CommToken, e);
+				if (Status != EChannelStatus.Closed)
+				{
+					releaseEvent = HandleReceiveEvent(e.UserToken as CommToken, e);
+				}
 			}
             else if (e.LastOperation == SocketAsyncOperation.Send)
 			{
-				releaseEvent = HandleSendEvent(e);
+				if (Status != EChannelStatus.Closed)
+				{
+					releaseEvent = HandleSendEvent(e);
+				}
 			}
 
 			if (releaseEvent)
