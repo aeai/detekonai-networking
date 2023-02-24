@@ -10,5 +10,8 @@ namespace Detekonai.Networking.Runtime.Tcp
     public interface IConnectionData
     {
         Socket Sock { get; }
+
+        void AddCustomData<T>(string key, T value);
+        T GetCustomData<T>(string key);
     }
 }

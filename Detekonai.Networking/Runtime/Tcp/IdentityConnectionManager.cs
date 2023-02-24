@@ -2,14 +2,10 @@
 using Detekonai.Core.Common;
 using Detekonai.Networking.Runtime.AsyncEvent;
 using Detekonai.Networking.Runtime.Strategy;
-using Detekonai.Networking.Tcp;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -41,20 +37,20 @@ namespace Detekonai.Networking.Runtime.Tcp
             try
             {
                 await Task.Delay(millis, token);
-                if(!token.IsCancellationRequested)
+                if (!token.IsCancellationRequested)
                 {
                     PurgeChannel(id);
                 }
             }
-            catch(OperationCanceledException)
-            {}
+            catch (OperationCanceledException)
+            { }
         }
 
         public void PurgeChannel(string id)
         {
-           if(channels.TryRemove(id, out TcpChannel val))
+            if (channels.TryRemove(id, out TcpChannel val))
             {
-                if(ChannelsOnHold.TryRemove(id, out CancellationTokenSource cts))
+                if (ChannelsOnHold.TryRemove(id, out CancellationTokenSource cts))
                 {
                     cts.Dispose();
                 }
@@ -74,11 +70,12 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
         }
 
-        
+
 
         private void AssignChannel(SocketAsyncEventArgs e, string id)
         {
             TcpChannel ch = null;
+            (e.UserToken as CommToken).ownerSocket.AddCustomData("session-id", id);
             if (channels.TryGetValue($"Ch-{id}", out ch))
             {
                 Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
@@ -87,12 +84,11 @@ namespace Detekonai.Networking.Runtime.Tcp
             }
             else
             {
-                var connData = new ConnectionDataWithIdentity((e.UserToken as CommToken).ownerSocket.Sock, id);
-                ch = factory.CreateFrom(connData);
+                ch = factory.CreateFrom((e.UserToken as CommToken).ownerSocket);
                 if (ch != null)
                 {
                     ch.Name = $"Ch-{id}";
-                    Socket sock = connData.Sock;
+                    Socket sock = (e.UserToken as CommToken).ownerSocket.Sock;
                     channels.TryAdd(ch.Name, ch);
                     Logger?.Log(this, $"TCP Ch-{id} assigned to {((IPEndPoint)sock.RemoteEndPoint).Address}:{((IPEndPoint)sock.RemoteEndPoint).Port}", ILogger.LogLevel.Verbose);
                     OnClientAccepted?.Invoke(ch);
@@ -109,7 +105,7 @@ namespace Detekonai.Networking.Runtime.Tcp
 
         private void Tactics_OnConnectionStatusChanged(ICommChannel channel)
         {
-            if(channel.Status == ICommChannel.EChannelStatus.Closed)
+            if (channel.Status == ICommChannel.EChannelStatus.Closed)
             {
                 if (ReconnectTimeoutMillis != -1)
                 {
@@ -124,13 +120,13 @@ namespace Detekonai.Networking.Runtime.Tcp
                     }
                 }
             }
-            else if(channel.Status == ICommChannel.EChannelStatus.Open)
+            else if (channel.Status == ICommChannel.EChannelStatus.Open)
             {
-               if(ChannelsOnHold.TryRemove(channel.Name, out CancellationTokenSource cts))
-               {
+                if (ChannelsOnHold.TryRemove(channel.Name, out CancellationTokenSource cts))
+                {
                     cts.Cancel();
                     cts.Dispose();
-               }
+                }
             }
         }
 
@@ -152,7 +148,7 @@ namespace Detekonai.Networking.Runtime.Tcp
                         token.ownerSocket.Sock.Dispose();
                     }
                     Logger?.Log(this, $"Error accepting socket identity: {e.SocketError}", ILogger.LogLevel.Error);
-                    
+
                 }
             }
             eventPool.Release(e);
